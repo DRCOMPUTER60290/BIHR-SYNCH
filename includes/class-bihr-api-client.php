@@ -86,14 +86,14 @@ class BihrWI_API_Client {
     }
 
     /**
-     * Lance la génération d’un catalog (References, Prices, Images, Attributes, Stocks, etc.)
-     * Exemple type: 'Prices/Full' -> Catalog/LZMA/CSV/Prices/Full
+     * Lance la génération d'un catalog (References, Prices, Images, Attributes, Stocks, etc.)
+     * Exemple: 'ExtendedReferences' -> /Catalog/ZIP/XML/ExtendedReferences/Full
      */
     public function start_catalog_generation( $catalog_path ) {
         $token = $this->get_token();
 
-        // L'API attend le format: /Catalog/ZIP/CSV/{CatalogName}/Full
-        $url = $this->base_url . '/Catalog/ZIP/CSV/' . ltrim( $catalog_path, '/' ) . '/Full';
+        // L'API attend le format: /Catalog/ZIP/XML/{CatalogName}/Full
+        $url = $this->base_url . '/Catalog/ZIP/XML/' . ltrim( $catalog_path, '/' ) . '/Full';
         $this->logger->log( 'Catalog: démarrage génération -> ' . $url );
 
         $response = wp_remote_post(
