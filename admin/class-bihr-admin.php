@@ -24,6 +24,7 @@ class BihrWI_Admin {
         add_action( 'admin_post_bihrwi_merge_catalogs', array( $this, 'handle_merge_catalogs' ) );
 		add_action( 'admin_post_bihrwi_check_prices_now', array( $this, 'handle_check_prices_now' ) );
 		add_action( 'admin_post_bihrwi_reset_data', array( $this, 'handle_reset_data' ) );
+		add_action( 'admin_post_bihrwi_download_all_catalogs', array( $this, 'handle_download_all_catalogs' ) );
 
 
     }
@@ -412,6 +413,115 @@ class BihrWI_Admin {
     wp_safe_redirect( $redirect );
     exit;
 }
+
+	/**
+	 * Handler pour télécharger tous les catalogues nécessaires en une seule action
+	 */
+	public function handle_download_all_catalogs() {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( 'Permission denied.' );
+		}
+
+		check_admin_referer( 'bihrwi_download_all_action', 'bihrwi_download_all_nonce' );
+
+		$redirect_url = add_query_arg( array( 'page' => 'bihrwi_products' ), admin_url( 'admin.php' ) );
+
+		try {
+			$this->logger->log( 'Téléchargement de tous les catalogues: démarrage' );
+
+			// Liste des catalogues à télécharger
+			$catalogs = array(
+				'ExtendedReferences' => 'ExtendedReferences',
+				'Attributes'         => 'Attributes',
+				'Images'             => 'Images',
+				'Stocks'             => 'Stocks',
+			);
+
+			$downloaded_files = array();
+
+			foreach ( $catalogs as $name => $path ) {
+				$this->logger->log( "Téléchargement du catalogue: {$name}" );
+
+				// 1. Démarrer la génération
+				$ticket_id = $this->api_client->start_catalog_generation( $path );
+				$this->logger->log( "Ticket ID pour {$name}: {$ticket_id}" );
+
+				// 2. Attendre que le fichier soit prêt (max 5 minutes)
+				$max_attempts = 60; // 60 * 5 secondes = 5 minutes
+				$attempt      = 0;
+				$status       = 'PROCESSING';
+
+				while ( $attempt < $max_attempts && $status === 'PROCESSING' ) {
+					sleep( 5 );
+					$status_response = $this->api_client->get_catalog_status( $ticket_id );
+					$status          = strtoupper( $status_response['status'] ?? '' );
+					$attempt++;
+
+					$this->logger->log( "Status {$name} (tentative {$attempt}): {$status}" );
+				}
+
+				if ( $status === 'ERROR' ) {
+					$error_msg = $status_response['error'] ?? 'Erreur inconnue';
+					throw new Exception( "Erreur lors de la génération du catalogue {$name}: {$error_msg}" );
+				}
+
+				if ( $status !== 'DONE' ) {
+					throw new Exception( "Timeout lors de la génération du catalogue {$name}" );
+				}
+
+				// 3. Télécharger le fichier
+				$download_id = $status_response['downloadId'] ?? '';
+				if ( empty( $download_id ) ) {
+					throw new Exception( "Pas de downloadId pour le catalogue {$name}" );
+				}
+
+				$zip_file = $this->api_client->download_catalog_file( $download_id, strtolower( $name ) );
+				if ( ! $zip_file ) {
+					throw new Exception( "Échec du téléchargement du catalogue {$name}" );
+				}
+
+				$downloaded_files[ $name ] = $zip_file;
+				$this->logger->log( "Catalogue {$name} téléchargé: {$zip_file}" );
+			}
+
+			// 4. Extraire tous les fichiers ZIP dans le dossier d'import
+			$import_dir = WP_CONTENT_DIR . '/uploads/bihr-import/';
+			if ( ! is_dir( $import_dir ) ) {
+				wp_mkdir_p( $import_dir );
+			}
+
+			$total_extracted = 0;
+			foreach ( $downloaded_files as $name => $zip_file ) {
+				$extracted = $this->product_sync->extract_zip_to_import_dir( $zip_file );
+				$total_extracted += $extracted;
+				$this->logger->log( "Extraction {$name}: {$extracted} fichiers" );
+			}
+
+			$this->logger->log( "Téléchargement terminé: {$total_extracted} fichiers CSV extraits" );
+
+			$redirect_url = add_query_arg(
+				array(
+					'bihrwi_download_success' => 1,
+					'bihrwi_files_count'      => $total_extracted,
+				),
+				$redirect_url
+			);
+
+		} catch ( Exception $e ) {
+			$this->logger->log( 'Erreur téléchargement catalogues: ' . $e->getMessage() );
+
+			$redirect_url = add_query_arg(
+				array(
+					'bihrwi_download_error' => 1,
+					'bihrwi_msg'            => urlencode( $e->getMessage() ),
+				),
+				$redirect_url
+			);
+		}
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
 
 	
 	

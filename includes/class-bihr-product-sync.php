@@ -738,4 +738,44 @@ class BihrWI_Product_Sync {
 
         return $count;
     }
+
+    /**
+     * Extrait un fichier ZIP vers le dossier d'import
+     * Retourne le nombre de fichiers CSV extraits
+     */
+    public function extract_zip_to_import_dir( $zip_file ) {
+        $import_dir = WP_CONTENT_DIR . '/uploads/bihr-import/';
+        
+        if ( ! is_dir( $import_dir ) ) {
+            wp_mkdir_p( $import_dir );
+        }
+
+        if ( ! file_exists( $zip_file ) ) {
+            $this->logger->log( "Fichier ZIP introuvable: {$zip_file}" );
+            return 0;
+        }
+
+        // Utilise la classe WP_Filesystem
+        WP_Filesystem();
+        global $wp_filesystem;
+
+        $unzipped = unzip_file( $zip_file, $import_dir );
+
+        if ( is_wp_error( $unzipped ) ) {
+            $this->logger->log( 'Erreur extraction ZIP: ' . $unzipped->get_error_message() );
+            return 0;
+        }
+
+        // Compte les fichiers CSV extraits
+        $csv_files = glob( $import_dir . '*.csv' );
+        $count     = count( $csv_files );
+
+        $this->logger->log( "Extraction ZIP réussie: {$count} fichiers CSV dans {$import_dir}" );
+
+        // Supprime le fichier ZIP après extraction
+        @unlink( $zip_file );
+
+        return $count;
+    }
 }
+
