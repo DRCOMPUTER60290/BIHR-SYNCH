@@ -96,14 +96,17 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
         </p></div>
     <?php endif; ?>
 
+    <?php if ( isset( $_GET['bihrwi_reset_success'] ) ) : ?>
+        <div class="notice notice-success"><p>
+            Toutes les données ont été effacées avec succès.
+        </p></div>
+    <?php endif; ?>
+
 
     <!-- =========================================================
          1. FUSION DES CATALOGUES CSV
     ========================================================== -->
-	
-	<h2>1. Fusion des catalogues CSV</h2>
-	
-	
+
     <h2>1. Fusion des catalogues CSV</h2>
 
     <p>
@@ -116,6 +119,13 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
         <?php wp_nonce_field( 'bihrwi_merge_catalogs_action', 'bihrwi_merge_catalogs_nonce' ); ?>
         <input type="hidden" name="action" value="bihrwi_merge_catalogs" />
         <?php submit_button( 'Fusionner les catalogues', 'primary' ); ?>
+    </form>
+
+    <!-- Bouton pour effacer les données -->
+    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:10px;" onsubmit="return confirm('Êtes-vous sûr de vouloir effacer toutes les données de la table wp_bihr_products ?');">
+        <?php wp_nonce_field( 'bihrwi_reset_data_action', 'bihrwi_reset_data_nonce' ); ?>
+        <input type="hidden" name="action" value="bihrwi_reset_data" />
+        <?php submit_button( 'Effacer les données', 'delete', '', false ); ?>
     </form>
 
     <hr />
