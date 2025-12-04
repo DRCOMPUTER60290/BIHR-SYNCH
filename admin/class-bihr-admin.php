@@ -223,8 +223,13 @@ class BihrWI_Admin {
         $current_page = isset( $_GET['paged'] ) ? max( 1, intval( $_GET['paged'] ) ) : 1;
         $per_page     = 20;
 
-        $products     = $this->product_sync->get_products( $current_page, $per_page );
-        $total        = $this->product_sync->get_products_count();
+        // Récupération des filtres
+        $filter_search = isset( $_GET['search'] ) ? sanitize_text_field( wp_unslash( $_GET['search'] ) ) : '';
+        $filter_stock  = isset( $_GET['stock_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['stock_filter'] ) ) : '';
+        $filter_price  = isset( $_GET['price_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['price_filter'] ) ) : '';
+
+        $products     = $this->product_sync->get_products( $current_page, $per_page, $filter_search, $filter_stock, $filter_price );
+        $total        = $this->product_sync->get_products_count( $filter_search, $filter_stock, $filter_price );
         $total_pages  = max( 1, ceil( $total / $per_page ) );
 
         include BIHRWI_PLUGIN_DIR . 'admin/views/products-page.php';

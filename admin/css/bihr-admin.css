@@ -99,3 +99,23 @@
     padding-bottom: 10px;
     border-bottom: 1px solid #c3c4c7;
 }
+
+/* Styles des filtres */
+.bihr-section select,
+.bihr-section input[type="text"] {
+    padding: 6px 10px;
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+.bihr-section select:focus,
+.bihr-section input[type="text"]:focus {
+    border-color: #2271b1;
+    outline: 1px solid #2271b1;
+}
+
+.bihr-section label {
+    color: #1d2327;
+    font-size: 13px;
+}

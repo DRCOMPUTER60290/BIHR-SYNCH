@@ -19,15 +19,45 @@ class BihrWI_Product_Sync {
      * ======================================================= */
 
     /**
-     * Retourne une page de produits depuis wp_bihr_products
+     * Retourne une page de produits depuis wp_bihr_products avec filtres
      */
-    public function get_products( $page = 1, $per_page = 20 ) {
+    public function get_products( $page = 1, $per_page = 20, $search = '', $stock_filter = '', $price_filter = '' ) {
         global $wpdb;
 
         $offset = ( max( 1, (int) $page ) - 1 ) * max( 1, (int) $per_page );
 
+        // Construction de la requête avec filtres
+        $where = array( '1=1' );
+        
+        // Filtre de recherche (code produit, nom, description)
+        if ( ! empty( $search ) ) {
+            $search_like = '%' . $wpdb->esc_like( $search ) . '%';
+            $where[]     = $wpdb->prepare(
+                '(product_code LIKE %s OR name LIKE %s OR description LIKE %s)',
+                $search_like,
+                $search_like,
+                $search_like
+            );
+        }
+
+        // Filtre de stock
+        if ( $stock_filter === 'in_stock' ) {
+            $where[] = 'stock_level > 0';
+        } elseif ( $stock_filter === 'out_of_stock' ) {
+            $where[] = '(stock_level = 0 OR stock_level IS NULL)';
+        }
+
+        // Filtre de prix
+        if ( $price_filter === 'with_price' ) {
+            $where[] = 'dealer_price_ht IS NOT NULL AND dealer_price_ht > 0';
+        } elseif ( $price_filter === 'without_price' ) {
+            $where[] = '(dealer_price_ht IS NULL OR dealer_price_ht = 0)';
+        }
+
+        $where_clause = implode( ' AND ', $where );
+
         $sql = $wpdb->prepare(
-            "SELECT * FROM {$this->table_name} ORDER BY id ASC LIMIT %d OFFSET %d",
+            "SELECT * FROM {$this->table_name} WHERE {$where_clause} ORDER BY id ASC LIMIT %d OFFSET %d",
             $per_page,
             $offset
         );
@@ -36,11 +66,42 @@ class BihrWI_Product_Sync {
     }
 
     /**
-     * Nombre total de lignes dans wp_bihr_products
+     * Nombre total de lignes dans wp_bihr_products avec filtres
      */
-    public function get_products_count() {
+    public function get_products_count( $search = '', $stock_filter = '', $price_filter = '' ) {
         global $wpdb;
-        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table_name}" );
+
+        // Construction de la requête avec filtres
+        $where = array( '1=1' );
+        
+        // Filtre de recherche
+        if ( ! empty( $search ) ) {
+            $search_like = '%' . $wpdb->esc_like( $search ) . '%';
+            $where[]     = $wpdb->prepare(
+                '(product_code LIKE %s OR name LIKE %s OR description LIKE %s)',
+                $search_like,
+                $search_like,
+                $search_like
+            );
+        }
+
+        // Filtre de stock
+        if ( $stock_filter === 'in_stock' ) {
+            $where[] = 'stock_level > 0';
+        } elseif ( $stock_filter === 'out_of_stock' ) {
+            $where[] = '(stock_level = 0 OR stock_level IS NULL)';
+        }
+
+        // Filtre de prix
+        if ( $price_filter === 'with_price' ) {
+            $where[] = 'dealer_price_ht IS NOT NULL AND dealer_price_ht > 0';
+        } elseif ( $price_filter === 'without_price' ) {
+            $where[] = '(dealer_price_ht IS NULL OR dealer_price_ht = 0)';
+        }
+
+        $where_clause = implode( ' AND ', $where );
+
+        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table_name} WHERE {$where_clause}" );
     }
 
     /* =========================================================

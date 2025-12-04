@@ -234,8 +234,65 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
     <h2>3. Prévisualisation des produits Bihr (table wp_bihr_products)</h2>
 
     <p>
-        <strong>Total :</strong> <?php echo intval( $total ); ?> produits enregistrés.
+        <strong>Total :</strong> <?php echo intval( $total ); ?> produits
+        <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) ) : ?>
+            (filtrés)
+        <?php endif; ?>
     </p>
+
+    <!-- Filtres -->
+    <div class="bihr-section">
+        <h3>🔍 Filtres de recherche</h3>
+        <form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+            <input type="hidden" name="page" value="bihrwi_products" />
+            
+            <div style="flex: 1; min-width: 250px;">
+                <label for="search" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Recherche (code, nom, description)
+                </label>
+                <input type="text" 
+                       name="search" 
+                       id="search" 
+                       value="<?php echo esc_attr( $filter_search ); ?>" 
+                       placeholder="Saisir un mot-clé..."
+                       style="width: 100%;" />
+            </div>
+
+            <div>
+                <label for="stock_filter" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Stock
+                </label>
+                <select name="stock_filter" id="stock_filter">
+                    <option value="">Tous</option>
+                    <option value="in_stock" <?php selected( $filter_stock, 'in_stock' ); ?>>En stock</option>
+                    <option value="out_of_stock" <?php selected( $filter_stock, 'out_of_stock' ); ?>>Hors stock</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="price_filter" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Prix
+                </label>
+                <select name="price_filter" id="price_filter">
+                    <option value="">Tous</option>
+                    <option value="with_price" <?php selected( $filter_price, 'with_price' ); ?>>Avec prix</option>
+                    <option value="without_price" <?php selected( $filter_price, 'without_price' ); ?>>Sans prix</option>
+                </select>
+            </div>
+
+            <div>
+                <?php submit_button( 'Filtrer', 'secondary', 'submit', false ); ?>
+            </div>
+
+            <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) ) : ?>
+                <div>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=bihrwi_products' ) ); ?>" class="button">
+                        Réinitialiser
+                    </a>
+                </div>
+            <?php endif; ?>
+        </form>
+    </div>
 
     <table class="widefat fixed striped">
         <thead>
