@@ -151,9 +151,41 @@ class BihrWI_Product_Sync {
             return 0;
         }
 
+        // Détecte le type MIME du fichier téléchargé
+        $file_type = wp_check_filetype_and_ext( $tmp, basename( parse_url( $image_url, PHP_URL_PATH ) ) );
+        
+        // Si le type n'est pas détecté, on essaie avec mime_content_type
+        if ( ! $file_type['ext'] && function_exists( 'mime_content_type' ) ) {
+            $mime = mime_content_type( $tmp );
+            $mime_to_ext = array(
+                'image/jpeg' => 'jpg',
+                'image/jpg'  => 'jpg',
+                'image/png'  => 'png',
+                'image/gif'  => 'gif',
+                'image/webp' => 'webp',
+            );
+            
+            if ( isset( $mime_to_ext[ $mime ] ) ) {
+                $file_type['ext']  = $mime_to_ext[ $mime ];
+                $file_type['type'] = $mime;
+            }
+        }
+        
+        // Génère un nom de fichier avec l'extension appropriée
+        $filename = basename( parse_url( $image_url, PHP_URL_PATH ) );
+        
+        // Si le fichier n'a pas d'extension reconnue, on ajoute celle détectée
+        if ( ! empty( $file_type['ext'] ) ) {
+            $path_info = pathinfo( $filename );
+            if ( empty( $path_info['extension'] ) || ! in_array( strtolower( $path_info['extension'] ), array( 'jpg', 'jpeg', 'png', 'gif', 'webp' ) ) ) {
+                $filename = $path_info['filename'] . '.' . $file_type['ext'];
+            }
+        }
+
         $file_array = array(
-            'name'     => basename( parse_url( $image_url, PHP_URL_PATH ) ),
+            'name'     => $filename,
             'tmp_name' => $tmp,
+            'type'     => $file_type['type'],
         );
 
         $attachment_id = media_handle_sideload( $file_array, $post_id );
