@@ -316,6 +316,14 @@ class BihrWI_Product_Sync {
 
         $this->logger->log( 'Fusion catalogues: fichiers trouvés = ' . print_r( $files, true ) );
 
+        // Vérifier si au moins un fichier a été trouvé
+        $files_found = array_filter( $files );
+        if ( empty( $files_found ) ) {
+            $this->logger->log( 'ERREUR: Aucun fichier XML trouvé dans ' . $upload_dir );
+            $this->logger->log( 'Contenu du dossier: ' . print_r( scandir( $upload_dir ), true ) );
+            return 0;
+        }
+
         $references_data         = array();
         $extendedreferences_data = array();
         $prices_data             = array();
@@ -510,12 +518,42 @@ class BihrWI_Product_Sync {
             return $result;
         }
 
+        $element_count = 0;
+        $first_element_logged = false;
+
         while ( $reader->read() ) {
+            // Log du premier élément racine pour debug
+            if ( ! $first_element_logged && $reader->nodeType === XMLReader::ELEMENT && $reader->depth === 0 ) {
+                $this->logger->log( 'Élément racine XML: ' . $reader->name );
+                $first_element_logged = true;
+            }
+
             if ( $reader->nodeType === XMLReader::ELEMENT && $reader->name === 'Reference' ) {
-                $node = simplexml_load_string( $reader->readOuterXml() );
+                $element_count++;
+                $xml_string = $reader->readOuterXml();
+                
+                // Log du premier élément pour voir la structure
+                if ( $element_count === 1 ) {
+                    $this->logger->log( 'Premier élément Reference XML (tronqué à 500 chars): ' . substr( $xml_string, 0, 500 ) );
+                }
+                
+                $node = simplexml_load_string( $xml_string );
+                
+                if ( $node === false ) {
+                    $this->logger->log( 'Erreur simplexml_load_string pour Reference' );
+                    continue;
+                }
                 
                 $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
                 if ( empty( $code ) ) {
+                    // Log des propriétés disponibles pour debug
+                    if ( $element_count === 1 ) {
+                        $properties = array();
+                        foreach ( $node->children() as $child ) {
+                            $properties[] = $child->getName();
+                        }
+                        $this->logger->log( 'Propriétés disponibles dans Reference: ' . implode( ', ', $properties ) );
+                    }
                     continue;
                 }
 
@@ -536,7 +574,7 @@ class BihrWI_Product_Sync {
         }
 
         $reader->close();
-        $this->logger->log( 'Parsing References: ' . count( $result ) . ' éléments.' );
+        $this->logger->log( 'Parsing References: ' . count( $result ) . ' éléments parsés sur ' . $element_count . ' éléments Reference trouvés.' );
 
         return $result;
     }
