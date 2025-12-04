@@ -585,11 +585,15 @@ class BihrWI_Admin {
 				'Stocks'             => 'Stocks',
 			);
 
-			$downloaded_files = array();
+		$downloaded_files = array();
+		$failed_catalogs  = array();
+		$max_retries      = 3; // Nombre de tentatives pour chaque catalogue
 
-			foreach ( $catalogs as $name => $path ) {
-				$this->logger->log( "AJAX: Téléchargement du catalogue: {$name}" );
+		// Première passe : essayer de télécharger tous les catalogues
+		foreach ( $catalogs as $name => $path ) {
+			$this->logger->log( "AJAX: Téléchargement du catalogue: {$name}" );
 
+			try {
 				$ticket_id       = $this->api_client->start_catalog_generation( $path );
 				$max_attempts    = 60;
 				$attempt         = 0;
@@ -609,29 +613,92 @@ class BihrWI_Admin {
 
 				if ( $status === 'ERROR' ) {
 					$error_msg = $status_response['error'] ?? 'Erreur inconnue';
-					throw new Exception( "Erreur génération {$name}: {$error_msg}" );
+					$this->logger->log( "AJAX: Erreur génération {$name}: {$error_msg}" );
+					$failed_catalogs[ $name ] = $path;
+					continue;
 				}
 
 				if ( $status !== 'DONE' ) {
-					throw new Exception( "Timeout génération {$name}" );
+					$this->logger->log( "AJAX: Timeout génération {$name}" );
+					$failed_catalogs[ $name ] = $path;
+					continue;
 				}
 
 				$download_id = $status_response['downloadId'] ?? '';
 				if ( empty( $download_id ) || $download_id === '00000000000000000000000000000000' ) {
-					$this->logger->log( "AJAX: Catalogue {$name} non disponible (downloadId vide ou nul), passage au suivant" );
-					continue; // Passe au catalogue suivant
+					$this->logger->log( "AJAX: Catalogue {$name} non disponible (downloadId vide ou nul)" );
+					continue; // Ne pas réessayer si le catalogue n'existe pas
 				}
 
 				$zip_file = $this->api_client->download_catalog_file( $download_id, strtolower( $name ) );
 				if ( ! $zip_file ) {
-					$this->logger->log( "AJAX: Échec téléchargement {$name}, passage au suivant" );
-					continue; // Passe au catalogue suivant au lieu de planter
+					$this->logger->log( "AJAX: Échec téléchargement {$name}" );
+					$failed_catalogs[ $name ] = $path;
+					continue;
 				}
 
 				$downloaded_files[ $name ] = $zip_file;
+				$this->logger->log( "AJAX: Catalogue {$name} téléchargé avec succès" );
+
+			} catch ( Exception $catalog_error ) {
+				$this->logger->log( "AJAX: Exception pour {$name}: " . $catalog_error->getMessage() );
+				$failed_catalogs[ $name ] = $path;
+			}
+		}
+
+		// Réessayer les catalogues échoués
+		$retry_count = 0;
+		while ( ! empty( $failed_catalogs ) && $retry_count < $max_retries ) {
+			$retry_count++;
+			$this->logger->log( "AJAX: Nouvelle tentative ({$retry_count}/{$max_retries}) pour " . count( $failed_catalogs ) . " catalogue(s)" );
+			
+			$still_failed = array();
+
+			foreach ( $failed_catalogs as $name => $path ) {
+				$this->logger->log( "AJAX: Réessai du catalogue: {$name}" );
+
+				try {
+					$ticket_id       = $this->api_client->start_catalog_generation( $path );
+					$max_attempts    = 60;
+					$attempt         = 0;
+
+					$status_response = $this->api_client->get_catalog_status( $ticket_id );
+					$status          = strtoupper( $status_response['status'] ?? '' );
+
+					while ( $attempt < $max_attempts && $status === 'PROCESSING' ) {
+						sleep( 5 );
+						$status_response = $this->api_client->get_catalog_status( $ticket_id );
+						$status          = strtoupper( $status_response['status'] ?? '' );
+						$attempt++;
+					}
+
+					if ( $status === 'ERROR' || $status !== 'DONE' ) {
+						$still_failed[ $name ] = $path;
+						continue;
+					}
+
+					$download_id = $status_response['downloadId'] ?? '';
+					if ( empty( $download_id ) || $download_id === '00000000000000000000000000000000' ) {
+						continue; // Ne pas réessayer
+					}
+
+					$zip_file = $this->api_client->download_catalog_file( $download_id, strtolower( $name ) );
+					if ( ! $zip_file ) {
+						$still_failed[ $name ] = $path;
+						continue;
+					}
+
+					$downloaded_files[ $name ] = $zip_file;
+					$this->logger->log( "AJAX: Catalogue {$name} téléchargé avec succès (après réessai)" );
+
+				} catch ( Exception $catalog_error ) {
+					$this->logger->log( "AJAX: Exception réessai {$name}: " . $catalog_error->getMessage() );
+					$still_failed[ $name ] = $path;
+				}
 			}
 
-			// Extraction
+			$failed_catalogs = $still_failed;
+		}			// Extraction
 			$import_dir = WP_CONTENT_DIR . '/uploads/bihr-import/';
 			if ( ! is_dir( $import_dir ) ) {
 				wp_mkdir_p( $import_dir );
