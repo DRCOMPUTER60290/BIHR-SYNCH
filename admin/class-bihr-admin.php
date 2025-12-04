@@ -595,7 +595,7 @@ class BihrWI_Admin {
 
 			try {
 				$ticket_id       = $this->api_client->start_catalog_generation( $path );
-				$max_attempts    = 60;
+				$max_attempts    = 120; // 120 * 5 sec = 10 minutes max
 				$attempt         = 0;
 
 				// Vérifie immédiatement le statut
@@ -608,7 +608,12 @@ class BihrWI_Admin {
 					$status_response = $this->api_client->get_catalog_status( $ticket_id );
 					$status          = strtoupper( $status_response['status'] ?? '' );
 					$attempt++;
-					$this->logger->log( "AJAX: Status {$name} (tentative {$attempt}): {$status}" );
+					
+					// Log toutes les 6 tentatives (30 secondes)
+					if ( $attempt % 6 === 0 ) {
+						$elapsed = ( $attempt * 5 ) / 60;
+						$this->logger->log( "AJAX: Status {$name}: {$status} (temps écoulé: " . number_format( $elapsed, 1 ) . " min)" );
+					}
 				}
 
 				if ( $status === 'ERROR' ) {
@@ -618,8 +623,14 @@ class BihrWI_Admin {
 					continue;
 				}
 
+				if ( $status === 'PROCESSING' ) {
+					$this->logger->log( "AJAX: Catalogue {$name} toujours en PROCESSING après 10 minutes, ajout pour réessai" );
+					$failed_catalogs[ $name ] = $path;
+					continue;
+				}
+
 				if ( $status !== 'DONE' ) {
-					$this->logger->log( "AJAX: Timeout génération {$name}" );
+					$this->logger->log( "AJAX: Statut inattendu pour {$name}: {$status}" );
 					$failed_catalogs[ $name ] = $path;
 					continue;
 				}
@@ -659,7 +670,7 @@ class BihrWI_Admin {
 
 				try {
 					$ticket_id       = $this->api_client->start_catalog_generation( $path );
-					$max_attempts    = 60;
+					$max_attempts    = 120; // 10 minutes max
 					$attempt         = 0;
 
 					$status_response = $this->api_client->get_catalog_status( $ticket_id );
@@ -670,9 +681,27 @@ class BihrWI_Admin {
 						$status_response = $this->api_client->get_catalog_status( $ticket_id );
 						$status          = strtoupper( $status_response['status'] ?? '' );
 						$attempt++;
+						
+						// Log toutes les 6 tentatives (30 secondes)
+						if ( $attempt % 6 === 0 ) {
+							$elapsed = ( $attempt * 5 ) / 60;
+							$this->logger->log( "AJAX: Réessai {$name}: {$status} (temps écoulé: " . number_format( $elapsed, 1 ) . " min)" );
+						}
 					}
 
-					if ( $status === 'ERROR' || $status !== 'DONE' ) {
+					if ( $status === 'ERROR' ) {
+						$this->logger->log( "AJAX: Erreur lors du réessai de {$name}" );
+						$still_failed[ $name ] = $path;
+						continue;
+					}
+
+					if ( $status === 'PROCESSING' ) {
+						$this->logger->log( "AJAX: {$name} toujours en PROCESSING après 10 minutes (réessai)" );
+						$still_failed[ $name ] = $path;
+						continue;
+					}
+
+					if ( $status !== 'DONE' ) {
 						$still_failed[ $name ] = $path;
 						continue;
 					}
