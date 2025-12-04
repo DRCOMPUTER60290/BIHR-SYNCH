@@ -245,23 +245,29 @@ class BihrWI_Product_Sync {
 
         // Recherche des différents fichiers (le plus récent pour chaque type)
         $files = array(
-            'references' => $this->find_latest_catalog_file( $upload_dir, 'references' ),
-            'prices'     => $this->find_latest_catalog_file( $upload_dir, 'prices' ),
-            'images'     => $this->find_latest_catalog_file( $upload_dir, 'images' ),
-            'inventory'  => $this->find_latest_catalog_file( $upload_dir, 'inventory' ),
-            'attributes' => $this->find_latest_catalog_file( $upload_dir, 'attributes' ),
+            'references'         => $this->find_latest_catalog_file( $upload_dir, 'references' ),
+            'extendedreferences' => $this->find_latest_catalog_file( $upload_dir, 'extendedreferences' ),
+            'prices'             => $this->find_latest_catalog_file( $upload_dir, 'prices' ),
+            'images'             => $this->find_latest_catalog_file( $upload_dir, 'images' ),
+            'inventory'          => $this->find_latest_catalog_file( $upload_dir, 'inventory' ),
+            'attributes'         => $this->find_latest_catalog_file( $upload_dir, 'attributes' ),
         );
 
         $this->logger->log( 'Fusion catalogues: fichiers trouvés = ' . print_r( $files, true ) );
 
-        $references_data = array();
-        $prices_data     = array();
-        $images_data     = array();
-        $inventory_data  = array();
-        $attributes_data = array();
+        $references_data         = array();
+        $extendedreferences_data = array();
+        $prices_data             = array();
+        $images_data             = array();
+        $inventory_data          = array();
+        $attributes_data         = array();
 
         if ( ! empty( $files['references'] ) ) {
             $references_data = $this->parse_references_csv( $files['references'] );
+        }
+
+        if ( ! empty( $files['extendedreferences'] ) ) {
+            $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
         }
 
         if ( ! empty( $files['prices'] ) ) {
@@ -287,6 +293,14 @@ class BihrWI_Product_Sync {
         foreach ( $references_data as $code => $row ) {
             if ( ! isset( $merged[ $code ] ) ) {
                 $merged[ $code ] = array();
+            }
+            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+        }
+
+        // ExtendedReferences : on fusionne en priorité pour écraser les descriptions de base
+        foreach ( $extendedreferences_data as $code => $row ) {
+            if ( ! isset( $merged[ $code ] ) ) {
+                $merged[ $code ] = array( 'product_code' => $code );
             }
             $merged[ $code ] = array_merge( $merged[ $code ], $row );
         }
@@ -459,6 +473,59 @@ class BihrWI_Product_Sync {
         }
 
         $this->logger->log( 'Parsing References: ' . count( $result ) . ' lignes.' );
+
+        return $result;
+    }
+
+    /**
+     * Parsing du catalog ExtendedReferences
+     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, ...
+     */
+    protected function parse_extendedreferences_csv( $file_path ) {
+        $this->logger->log( 'Parsing ExtendedReferences CSV : ' . $file_path );
+
+        $rows   = $this->read_csv_assoc( $file_path );
+        $result = array();
+
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
+
+            // Tentative de récupération de la description la plus complète
+            $description = '';
+            
+            // Priorité : LongDescription > TechnicalDescription > Description > FurtherDescription
+            if ( ! empty( $row['longdescription'] ) ) {
+                $description = trim( $row['longdescription'] );
+            } elseif ( ! empty( $row['technicaldescription'] ) ) {
+                $description = trim( $row['technicaldescription'] );
+            } elseif ( ! empty( $row['description'] ) ) {
+                $description = trim( $row['description'] );
+            } elseif ( ! empty( $row['furtherdescription'] ) ) {
+                $description = trim( $row['furtherdescription'] );
+            }
+
+            // Nom court si disponible
+            $name = '';
+            if ( ! empty( $row['shortdescription'] ) ) {
+                $name = trim( $row['shortdescription'] );
+            } elseif ( ! empty( $row['name'] ) ) {
+                $name = trim( $row['name'] );
+            }
+
+            $result[ $code ] = array(
+                'description' => $description ?: null,
+            );
+
+            // On n'écrase le nom que s'il est défini dans ExtendedReferences
+            if ( $name ) {
+                $result[ $code ]['name'] = $name;
+            }
+        }
+
+        $this->logger->log( 'Parsing ExtendedReferences: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }

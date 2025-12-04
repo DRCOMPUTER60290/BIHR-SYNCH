@@ -110,8 +110,8 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
     <h2>1. Fusion des catalogues CSV</h2>
 
     <p>
-        Place tous les fichiers CSV Bihr (<code>references</code>, <code>prices</code>,
-        <code>images</code>, <code>inventory</code>, <code>attributes</code>) dans
+        Place tous les fichiers CSV Bihr (<code>references</code>, <code>extendedreferences</code>, 
+        <code>prices</code>, <code>images</code>, <code>inventory</code>, <code>attributes</code>) dans
         <code>wp-content/uploads/bihr-import/</code>, puis clique sur le bouton ci-dessous.
     </p>
 
