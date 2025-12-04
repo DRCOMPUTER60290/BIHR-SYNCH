@@ -104,7 +104,13 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
 
     <?php if ( isset( $_GET['bihrwi_download_success'] ) ) : ?>
         <div class="notice notice-success"><p>
-            Téléchargement terminé ! <?php echo intval( $_GET['bihrwi_files_count'] ); ?> fichiers CSV ont été extraits dans le dossier d'import.
+            Téléchargement terminé ! 
+            <?php 
+            $catalogs = isset( $_GET['bihrwi_catalogs_count'] ) ? intval( $_GET['bihrwi_catalogs_count'] ) : 0;
+            $files = intval( $_GET['bihrwi_files_count'] );
+            echo $catalogs > 0 ? $catalogs . ' catalogue(s) téléchargé(s), ' : '';
+            echo $files . ' fichier(s) CSV extrait(s) dans le dossier d\'import.';
+            ?>
         </p></div>
     <?php endif; ?>
 

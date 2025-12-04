@@ -29,7 +29,12 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.success) {
                     $progressBar.css('width', '100%');
-                    $progressText.text('✓ Téléchargement terminé ! ' + response.data.files_count + ' fichiers extraits.');
+                    var msg = '✓ Téléchargement terminé ! ';
+                    if (response.data.catalogs_count) {
+                        msg += response.data.catalogs_count + ' catalogue(s), ';
+                    }
+                    msg += response.data.files_count + ' fichier(s) extraits.';
+                    $progressText.text(msg);
                     $progressBar.addClass('complete');
                     
                     // Recharge la page après 2 secondes

@@ -508,13 +508,15 @@ class BihrWI_Admin {
 
 				// 3. Télécharger le fichier
 				$download_id = $status_response['downloadId'] ?? '';
-				if ( empty( $download_id ) ) {
-					throw new Exception( "Pas de downloadId pour le catalogue {$name}" );
+				if ( empty( $download_id ) || $download_id === '00000000000000000000000000000000' ) {
+					$this->logger->log( "Catalogue {$name} non disponible (downloadId vide ou nul), passage au suivant" );
+					continue; // Passe au catalogue suivant
 				}
 
 				$zip_file = $this->api_client->download_catalog_file( $download_id, strtolower( $name ) );
 				if ( ! $zip_file ) {
-					throw new Exception( "Échec du téléchargement du catalogue {$name}" );
+					$this->logger->log( "Échec téléchargement {$name}, passage au suivant" );
+					continue; // Passe au catalogue suivant au lieu de planter
 				}
 
 				$downloaded_files[ $name ] = $zip_file;
@@ -534,12 +536,14 @@ class BihrWI_Admin {
 				$this->logger->log( "Extraction {$name}: {$extracted} fichiers" );
 			}
 
-			$this->logger->log( "Téléchargement terminé: {$total_extracted} fichiers CSV extraits" );
+			$catalogs_downloaded = count( $downloaded_files );
+			$this->logger->log( "Téléchargement terminé: {$catalogs_downloaded} catalogues, {$total_extracted} fichiers CSV extraits" );
 
 			$redirect_url = add_query_arg(
 				array(
-					'bihrwi_download_success' => 1,
-					'bihrwi_files_count'      => $total_extracted,
+					'bihrwi_download_success'   => 1,
+					'bihrwi_files_count'        => $total_extracted,
+					'bihrwi_catalogs_count'     => $catalogs_downloaded,
 				),
 				$redirect_url
 			);
@@ -613,13 +617,15 @@ class BihrWI_Admin {
 				}
 
 				$download_id = $status_response['downloadId'] ?? '';
-				if ( empty( $download_id ) ) {
-					throw new Exception( "Pas de downloadId pour {$name}" );
+				if ( empty( $download_id ) || $download_id === '00000000000000000000000000000000' ) {
+					$this->logger->log( "AJAX: Catalogue {$name} non disponible (downloadId vide ou nul), passage au suivant" );
+					continue; // Passe au catalogue suivant
 				}
 
 				$zip_file = $this->api_client->download_catalog_file( $download_id, strtolower( $name ) );
 				if ( ! $zip_file ) {
-					throw new Exception( "Échec téléchargement {$name}" );
+					$this->logger->log( "AJAX: Échec téléchargement {$name}, passage au suivant" );
+					continue; // Passe au catalogue suivant au lieu de planter
 				}
 
 				$downloaded_files[ $name ] = $zip_file;
@@ -637,9 +643,13 @@ class BihrWI_Admin {
 				$total_extracted += $extracted;
 			}
 
-			$this->logger->log( "AJAX: Téléchargement terminé - {$total_extracted} fichiers" );
+			$catalogs_downloaded = count( $downloaded_files );
+			$this->logger->log( "AJAX: Téléchargement terminé - {$catalogs_downloaded} catalogues, {$total_extracted} fichiers" );
 
-			wp_send_json_success( array( 'files_count' => $total_extracted ) );
+			wp_send_json_success( array( 
+				'files_count'    => $total_extracted,
+				'catalogs_count' => $catalogs_downloaded,
+			) );
 
 		} catch ( Exception $e ) {
 			$this->logger->log( 'AJAX: Erreur - ' . $e->getMessage() );
