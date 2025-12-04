@@ -68,11 +68,13 @@ jQuery(document).ready(function($) {
                         $progressBar.css('width', newPercent + '%');
                         
                         // Messages de progression
-                        if (newPercent < 25) {
+                        if (newPercent < 20) {
+                            $progressText.text('Téléchargement du catalogue References...');
+                        } else if (newPercent < 40) {
                             $progressText.text('Téléchargement du catalogue ExtendedReferences...');
-                        } else if (newPercent < 50) {
+                        } else if (newPercent < 55) {
                             $progressText.text('Téléchargement du catalogue Attributes...');
-                        } else if (newPercent < 75) {
+                        } else if (newPercent < 70) {
                             $progressText.text('Téléchargement du catalogue Images...');
                         } else if (newPercent < 90) {
                             $progressText.text('Téléchargement du catalogue Stocks...');

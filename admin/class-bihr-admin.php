@@ -466,15 +466,14 @@ class BihrWI_Admin {
 		try {
 			$this->logger->log( 'Téléchargement de tous les catalogues: démarrage' );
 
-			// Liste des catalogues à télécharger
-			$catalogs = array(
-				'ExtendedReferences' => 'ExtendedReferences',
-				'Attributes'         => 'Attributes',
-				'Images'             => 'Images',
-				'Stocks'             => 'Stocks',
-			);
-
-			$downloaded_files = array();
+            // Liste des catalogues à télécharger
+            $catalogs = array(
+                'References'         => 'References',
+                'ExtendedReferences' => 'ExtendedReferences',
+                'Attributes'         => 'Attributes',
+                'Images'             => 'Images',
+                'Stocks'             => 'Stocks',
+            );			$downloaded_files = array();
 
 			foreach ( $catalogs as $name => $path ) {
 				$this->logger->log( "Téléchargement du catalogue: {$name}" );
@@ -577,15 +576,14 @@ class BihrWI_Admin {
 		try {
 			$this->logger->log( 'AJAX: Téléchargement de tous les catalogues' );
 
-			// Liste des catalogues
-			$catalogs = array(
-				'ExtendedReferences' => 'ExtendedReferences',
-				'Attributes'         => 'Attributes',
-				'Images'             => 'Images',
-				'Stocks'             => 'Stocks',
-			);
-
-		$downloaded_files = array();
+            // Liste des catalogues
+            $catalogs = array(
+                'References'         => 'References',
+                'ExtendedReferences' => 'ExtendedReferences',
+                'Attributes'         => 'Attributes',
+                'Images'             => 'Images',
+                'Stocks'             => 'Stocks',
+            );		$downloaded_files = array();
 		$failed_catalogs  = array();
 		$max_retries      = 3; // Nombre de tentatives pour chaque catalogue
 

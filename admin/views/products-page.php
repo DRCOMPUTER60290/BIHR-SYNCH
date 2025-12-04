@@ -131,15 +131,15 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
     <div class="bihr-section">
         <h3>Option A : Téléchargement automatique depuis l'API Bihr</h3>
         <p>
-            Télécharge automatiquement les catalogues <code>ExtendedReferences</code>, <code>Attributes</code>, 
-            <code>Images</code> et <code>Stocks</code> depuis l'API Bihr et les extrait dans le dossier d'import.
+            Télécharge automatiquement les catalogues <code>References</code>, <code>ExtendedReferences</code>, 
+            <code>Attributes</code>, <code>Images</code> et <code>Stocks</code> depuis l'API Bihr et les extrait dans le dossier d'import.
             <br><strong>⚠️ Cette opération peut prendre plusieurs minutes.</strong>
         </p>
 
         <form method="post" id="bihr-download-all-form" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
             <?php wp_nonce_field( 'bihrwi_download_all_action', 'bihrwi_download_all_nonce' ); ?>
             <input type="hidden" name="action" value="bihrwi_download_all_catalogs" />
-            <?php submit_button( '📥 Télécharger tous les catalogues (ExtendedReferences, Attributes, Images, Stocks)', 'primary large', 'submit', false ); ?>
+            <?php submit_button( '📥 Télécharger tous les catalogues (References, ExtendedReferences, Attributes, Images, Stocks)', 'primary large', 'submit', false ); ?>
         </form>
 
         <div id="bihr-download-progress" class="bihr-progress-container">
