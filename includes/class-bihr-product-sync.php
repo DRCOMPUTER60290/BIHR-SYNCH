@@ -1,0 +1,642 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
+class BihrWI_Product_Sync {
+
+    protected $logger;
+    protected $table_name;
+
+    public function __construct( BihrWI_Logger $logger ) {
+        global $wpdb;
+        $this->logger     = $logger;
+        $this->table_name = $wpdb->prefix . 'bihr_products';
+    }
+
+    /* =========================================================
+     *   LECTURE / LISTE DES PRODUITS (pour la page d’admin)
+     * ======================================================= */
+
+    /**
+     * Retourne une page de produits depuis wp_bihr_products
+     */
+    public function get_products( $page = 1, $per_page = 20 ) {
+        global $wpdb;
+
+        $offset = ( max( 1, (int) $page ) - 1 ) * max( 1, (int) $per_page );
+
+        $sql = $wpdb->prepare(
+            "SELECT * FROM {$this->table_name} ORDER BY id ASC LIMIT %d OFFSET %d",
+            $per_page,
+            $offset
+        );
+
+        return $wpdb->get_results( $sql );
+    }
+
+    /**
+     * Nombre total de lignes dans wp_bihr_products
+     */
+    public function get_products_count() {
+        global $wpdb;
+        return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$this->table_name}" );
+    }
+
+    /* =========================================================
+     *          IMPORT D’UN PRODUIT DANS WOOCOMMERCE
+     * ======================================================= */
+
+    /**
+     * Importe un produit Bihr (ligne de wp_bihr_products) vers WooCommerce
+     */
+    public function import_to_woocommerce( $product_id ) {
+        global $wpdb;
+
+        $row = $wpdb->get_row(
+            $wpdb->prepare(
+                "SELECT * FROM {$this->table_name} WHERE id = %d",
+                (int) $product_id
+            )
+        );
+
+        if ( ! $row ) {
+            throw new Exception( 'Produit introuvable dans wp_bihr_products.' );
+        }
+
+        if ( ! class_exists( 'WC_Product_Simple' ) ) {
+            throw new Exception( 'WooCommerce n’est pas chargé.' );
+        }
+
+        $this->logger->log( 'Import WooCommerce: préparation produit ' . $row->product_code );
+
+        // Création d’un produit simple
+        $product = new WC_Product_Simple();
+
+        // Nom du produit
+        $name = $row->name ?: $row->product_code;
+        $product->set_name( $name );
+
+        // Description
+        if ( ! empty( $row->description ) ) {
+            $product->set_description( $row->description );
+        }
+
+        // Prix HT (on le met comme prix catalogue – à adapter si tu veux une marge)
+        if ( $row->dealer_price_ht !== null ) {
+            $product->set_regular_price( wc_format_decimal( $row->dealer_price_ht ) );
+        }
+
+        // Gestion du stock
+        if ( $row->stock_level !== null ) {
+            $product->set_manage_stock( true );
+            $product->set_stock_quantity( (int) $row->stock_level );
+            $product->set_stock_status( (int) $row->stock_level > 0 ? 'instock' : 'outofstock' );
+        }
+
+        // Sauvegarde du produit
+        $product_id_wc = $product->save();
+
+        // Meta Bihr
+        update_post_meta( $product_id_wc, '_bihr_product_code', $row->product_code );
+        if ( ! empty( $row->new_part_number ) ) {
+            update_post_meta( $product_id_wc, '_bihr_new_part_number', $row->new_part_number );
+        }
+
+        // Image principale (si URL disponible)
+        if ( ! empty( $row->image_url ) ) {
+            $attachment_id = $this->download_and_attach_image( $row->image_url, $product_id_wc );
+            if ( $attachment_id ) {
+                $product->set_image_id( $attachment_id );
+                $product->save();
+            }
+        }
+
+        $this->logger->log(
+            'Import WooCommerce: produit ' . $row->product_code . ' importé avec succès (post_id=' . $product_id_wc . ')'
+        );
+
+        return $product_id_wc;
+    }
+
+    /**
+     * Télécharge et attache une image à un produit WooCommerce
+     */
+    protected function download_and_attach_image( $image_url, $post_id ) {
+
+        // OPTION 2 : si l'URL ne commence pas par http, on ajoute le préfixe https://api.mybihr.com
+        if ( ! preg_match( '#^https?://#i', $image_url ) ) {
+            $image_url = rtrim( BIHRWI_IMAGE_BASE_URL, '/' ) . '/' . ltrim( $image_url, '/' );
+        }
+
+        $this->logger->log( 'Téléchargement image : ' . $image_url );
+
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+
+        // Vérifie si on a déjà une image avec cette URL (évite les doublons)
+        $existing_id = $this->find_existing_attachment_by_url( $image_url );
+        if ( $existing_id ) {
+            $this->logger->log( 'Image déjà présente (attachment_id=' . $existing_id . ').' );
+            set_post_thumbnail( $post_id, $existing_id );
+            return $existing_id;
+        }
+
+        // Télécharge l'image avec media_sideload_image
+        $tmp = download_url( $image_url );
+
+        if ( is_wp_error( $tmp ) ) {
+            $this->logger->log( 'Erreur download_url : ' . $tmp->get_error_message() );
+            return 0;
+        }
+
+        $file_array = array(
+            'name'     => basename( parse_url( $image_url, PHP_URL_PATH ) ),
+            'tmp_name' => $tmp,
+        );
+
+        $attachment_id = media_handle_sideload( $file_array, $post_id );
+
+        if ( is_wp_error( $attachment_id ) ) {
+            $this->logger->log( 'Erreur media_handle_sideload : ' . $attachment_id->get_error_message() );
+            @unlink( $tmp );
+            return 0;
+        }
+
+        // On stocke la source dans un meta pour éviter les doublons plus tard
+        update_post_meta( $attachment_id, '_bihr_image_source', esc_url_raw( $image_url ) );
+
+        return $attachment_id;
+    }
+
+    /**
+     * Retrouve un attachment existant par son meta _bihr_image_source
+     */
+    protected function find_existing_attachment_by_url( $image_url ) {
+        $args = array(
+            'post_type'      => 'attachment',
+            'post_status'    => 'inherit',
+            'posts_per_page' => 1,
+            'meta_query'     => array(
+                array(
+                    'key'   => '_bihr_image_source',
+                    'value' => esc_url_raw( $image_url ),
+                ),
+            ),
+            'fields'         => 'ids',
+        );
+
+        $ids = get_posts( $args );
+        if ( ! empty( $ids ) ) {
+            return (int) $ids[0];
+        }
+
+        return 0;
+    }
+
+    /* =========================================================
+     *      FUSION DES CATALOGUES CSV -> TABLE wp_bihr_products
+     * ======================================================= */
+
+    /**
+     * Fusionne les différents catalogues CSV présents dans wp-content/uploads/bihr-import/
+     */
+    public function merge_catalogs_from_directory() {
+        $upload_dir = WP_CONTENT_DIR . '/uploads/bihr-import';
+
+        if ( ! is_dir( $upload_dir ) ) {
+            wp_mkdir_p( $upload_dir );
+        }
+
+        $this->logger->log( 'Fusion catalogues: dossier = ' . $upload_dir );
+
+        // Recherche des différents fichiers (le plus récent pour chaque type)
+        $files = array(
+            'references' => $this->find_latest_catalog_file( $upload_dir, 'references' ),
+            'prices'     => $this->find_latest_catalog_file( $upload_dir, 'prices' ),
+            'images'     => $this->find_latest_catalog_file( $upload_dir, 'images' ),
+            'inventory'  => $this->find_latest_catalog_file( $upload_dir, 'inventory' ),
+            'attributes' => $this->find_latest_catalog_file( $upload_dir, 'attributes' ),
+        );
+
+        $this->logger->log( 'Fusion catalogues: fichiers trouvés = ' . print_r( $files, true ) );
+
+        $references_data = array();
+        $prices_data     = array();
+        $images_data     = array();
+        $inventory_data  = array();
+        $attributes_data = array();
+
+        if ( ! empty( $files['references'] ) ) {
+            $references_data = $this->parse_references_csv( $files['references'] );
+        }
+
+        if ( ! empty( $files['prices'] ) ) {
+            $prices_data = $this->parse_prices_csv( $files['prices'] );
+        }
+
+        if ( ! empty( $files['images'] ) ) {
+            $images_data = $this->parse_images_csv( $files['images'] );
+        }
+
+        if ( ! empty( $files['inventory'] ) ) {
+            $inventory_data = $this->parse_inventory_csv( $files['inventory'] );
+        }
+
+        if ( ! empty( $files['attributes'] ) ) {
+            $attributes_data = $this->parse_attributes_csv( $files['attributes'] );
+        }
+
+        // Fusion par code produit
+        $merged = array();
+
+        // Références comme base principale
+        foreach ( $references_data as $code => $row ) {
+            if ( ! isset( $merged[ $code ] ) ) {
+                $merged[ $code ] = array();
+            }
+            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+        }
+
+        // On ajoute ce qui n’est pas encore présent
+        foreach ( $prices_data as $code => $row ) {
+            if ( ! isset( $merged[ $code ] ) ) {
+                $merged[ $code ] = array( 'product_code' => $code );
+            }
+            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+        }
+
+        foreach ( $images_data as $code => $row ) {
+            if ( ! isset( $merged[ $code ] ) ) {
+                $merged[ $code ] = array( 'product_code' => $code );
+            }
+            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+        }
+
+        foreach ( $inventory_data as $code => $row ) {
+            if ( ! isset( $merged[ $code ] ) ) {
+                $merged[ $code ] = array( 'product_code' => $code );
+            }
+            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+        }
+
+        foreach ( $attributes_data as $code => $row ) {
+            if ( ! isset( $merged[ $code ] ) ) {
+                $merged[ $code ] = array( 'product_code' => $code );
+            }
+            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+        }
+
+        // Écriture dans la table wp_bihr_products
+        $count = $this->save_merged_products( $merged );
+
+        $this->logger->log( 'Fusion catalogues: terminé – ' . $count . ' produits fusionnés.' );
+
+        return $count;
+    }
+
+    /**
+     * Trouve le fichier CSV le plus récent contenant un mot clé
+     */
+    protected function find_latest_catalog_file( $dir, $keyword ) {
+        $pattern = trailingslashit( $dir ) . '*' . $keyword . '*.csv';
+
+        $files = glob( $pattern );
+        if ( empty( $files ) ) {
+            return '';
+        }
+
+        usort(
+            $files,
+            function( $a, $b ) {
+                return filemtime( $b ) - filemtime( $a );
+            }
+        );
+
+        return $files[0];
+    }
+
+    /**
+     * Lit un CSV et retourne un tableau associatif (en minuscules pour les clés)
+     */
+    protected function read_csv_assoc( $file_path ) {
+        $rows = array();
+
+        if ( ! file_exists( $file_path ) ) {
+            return $rows;
+        }
+
+        $handle = fopen( $file_path, 'r' );
+        if ( ! $handle ) {
+            return $rows;
+        }
+
+        // Détection du séparateur ; ou ,
+        $first_line = fgets( $handle );
+        rewind( $handle );
+        $delimiter = ( substr_count( $first_line, ';' ) > substr_count( $first_line, ',' ) ) ? ';' : ',';
+
+        $header = fgetcsv( $handle, 0, $delimiter );
+        if ( ! $header ) {
+            fclose( $handle );
+            return $rows;
+        }
+
+        $header = array_map(
+            function( $h ) {
+                return strtolower( trim( $h ) );
+            },
+            $header
+        );
+
+        while ( ( $data = fgetcsv( $handle, 0, $delimiter ) ) !== false ) {
+            if ( count( $data ) !== count( $header ) ) {
+                continue;
+            }
+
+            $row = array();
+            foreach ( $header as $i => $key ) {
+                $row[ $key ] = isset( $data[ $i ] ) ? $data[ $i ] : '';
+            }
+
+            $rows[] = $row;
+        }
+
+        fclose( $handle );
+
+        return $rows;
+    }
+
+    /**
+     * Essaie de récupérer le code produit à partir d’une ligne CSV
+     * (ProductCode, ProductId, etc.)
+     */
+    protected function get_product_code_from_row( $row ) {
+        if ( isset( $row['productcode'] ) && $row['productcode'] !== '' ) {
+            return trim( $row['productcode'] );
+        }
+        if ( isset( $row['productid'] ) && $row['productid'] !== '' ) {
+            return trim( $row['productid'] );
+        }
+        if ( isset( $row['code'] ) && $row['code'] !== '' ) {
+            return trim( $row['code'] );
+        }
+
+        return '';
+    }
+
+    /* ======== PARSING DES DIFFÉRENTS CATALOGUES ======== */
+
+    /**
+     * Parsing du catalog References
+     * Fichier : ProductCode, NewPartNumber, ShortDescription, FurtherDescription, ...
+     */
+    protected function parse_references_csv( $file_path ) {
+        $this->logger->log( 'Parsing References CSV : ' . $file_path );
+
+        $rows   = $this->read_csv_assoc( $file_path );
+        $result = array();
+
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
+
+            $new_part_number = isset( $row['newpartnumber'] ) ? trim( $row['newpartnumber'] ) : '';
+            $name            = '';
+
+            if ( ! empty( $row['shortdescription'] ) ) {
+                $name = trim( $row['shortdescription'] );
+            } elseif ( ! empty( $row['furtherdescription'] ) ) {
+                $name = trim( $row['furtherdescription'] );
+            }
+
+            $description = '';
+            if ( ! empty( $row['furtherdescription'] ) ) {
+                $description = trim( $row['furtherdescription'] );
+            }
+
+            $result[ $code ] = array(
+                'product_code'    => $code,
+                'new_part_number' => $new_part_number ?: null,
+                'name'            => $name ?: null,
+                'description'     => $description ?: null,
+            );
+        }
+
+        $this->logger->log( 'Parsing References: ' . count( $result ) . ' lignes.' );
+
+        return $result;
+    }
+
+    /**
+     * Parsing du catalog Prices
+     * Fichier : ProductCode, DealerPrice, ...
+     */
+    protected function parse_prices_csv( $file_path ) {
+        $this->logger->log( 'Parsing Prices CSV : ' . $file_path );
+
+        $rows   = $this->read_csv_assoc( $file_path );
+        $result = array();
+
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
+
+            // Colonne DealerPrice, parfois DealerPriceHT, etc.
+            $price = null;
+            if ( isset( $row['dealerprice'] ) && $row['dealerprice'] !== '' ) {
+                $price = (float) str_replace( ',', '.', $row['dealerprice'] );
+            } elseif ( isset( $row['dealerpriceht'] ) && $row['dealerpriceht'] !== '' ) {
+                $price = (float) str_replace( ',', '.', $row['dealerpriceht'] );
+            }
+
+            if ( $price === null ) {
+                continue;
+            }
+
+            $result[ $code ] = array(
+                'dealer_price_ht' => $price,
+            );
+        }
+
+        $this->logger->log( 'Parsing Prices: ' . count( $result ) . ' lignes.' );
+
+        return $result;
+    }
+
+    /**
+     * Parsing du catalog Images
+     * On récupère simplement le chemin (colonne Url) sans préfixe.
+     * Le préfixe https://api.mybihr.com sera ajouté plus tard.
+     * Fichier : ProductCode, Url, IsDefault, NewPartNumber
+     */
+    protected function parse_images_csv( $file_path ) {
+        $this->logger->log( 'Parsing Images CSV : ' . $file_path );
+
+        $rows   = $this->read_csv_assoc( $file_path );
+        $result = array();
+
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
+
+            // Colonne URL du CSV (en minuscules -> 'url')
+            $url_path = isset( $row['url'] ) ? trim( $row['url'] ) : '';
+            if ( $url_path === '' ) {
+                continue;
+            }
+
+            // Colonne IsDefault (facultative) :
+            // On ne filtre pas sur ce champ pour l'instant,
+            // on prendra simplement la première image trouvée pour chaque produit.
+
+            // Si une image existe déjà pour ce code, on ne la remplace pas
+            if ( isset( $result[ $code ] ) ) {
+                continue;
+            }
+
+            $result[ $code ] = array(
+                'image_url' => $url_path, // chemin brut, sans préfixe
+            );
+        }
+
+        $this->logger->log( 'Parsing Images: ' . count( $result ) . ' lignes.' );
+
+        return $result;
+    }
+
+    /**
+     * Parsing du catalog Inventory (Stock)
+     * Fichier : ProductId, StockLevel, StockLevelDescription, NewPartNumber
+     */
+    protected function parse_inventory_csv( $file_path ) {
+        $this->logger->log( 'Parsing Inventory CSV : ' . $file_path );
+
+        $rows   = $this->read_csv_assoc( $file_path );
+        $result = array();
+
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
+
+            $stock_level       = isset( $row['stocklevel'] ) ? (int) $row['stocklevel'] : null;
+            $stock_description = isset( $row['stockleveldescription'] ) ? trim( $row['stockleveldescription'] ) : '';
+
+            $result[ $code ] = array(
+                'stock_level'       => $stock_level,
+                'stock_description' => $stock_description ?: null,
+            );
+        }
+
+        $this->logger->log( 'Parsing Inventory: ' . count( $result ) . ' lignes.' );
+
+        return $result;
+    }
+
+    /**
+     * Parsing du catalog Attributes (optionnel)
+     * Ici, on se contente de concaténer les attributs dans la description.
+     */
+    protected function parse_attributes_csv( $file_path ) {
+        $this->logger->log( 'Parsing Attributes CSV : ' . $file_path );
+
+        $rows   = $this->read_csv_assoc( $file_path );
+        $result = array();
+
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
+
+            // On concatène grossièrement tous les champs (sauf le code) en texte
+            $parts = array();
+            foreach ( $row as $key => $value ) {
+                if ( in_array( $key, array( 'productcode', 'productid', 'code' ), true ) ) {
+                    continue;
+                }
+                if ( $value === '' ) {
+                    continue;
+                }
+                $parts[] = $key . '=' . $value;
+            }
+
+            if ( empty( $parts ) ) {
+                continue;
+            }
+
+            $attr_text = 'Attributs Bihr : ' . implode( ' | ', $parts );
+
+            $result[ $code ] = array(
+                'attributes_text' => $attr_text,
+            );
+        }
+
+        $this->logger->log( 'Parsing Attributes: ' . count( $result ) . ' lignes.' );
+
+        return $result;
+    }
+
+    /**
+     * Enregistre la fusion finale dans la table wp_bihr_products
+     */
+    protected function save_merged_products( $merged ) {
+        global $wpdb;
+
+        $count = 0;
+
+        foreach ( $merged as $code => $data ) {
+            if ( empty( $code ) ) {
+                continue;
+            }
+
+            // Description + ajout éventuel des attributs
+            $description = '';
+            if ( isset( $data['description'] ) && $data['description'] !== null ) {
+                $description = (string) $data['description'];
+            }
+
+            if ( isset( $data['attributes_text'] ) && $data['attributes_text'] !== null ) {
+                $description .= "\n\n" . $data['attributes_text'];
+            }
+
+            // Construction des champs à enregistrer
+            $fields = array(
+                'product_code'      => $code,
+                'new_part_number'   => isset( $data['new_part_number'] ) ? $data['new_part_number'] : null,
+                'name'              => isset( $data['name'] ) ? $data['name'] : null,
+                'description'       => $description !== '' ? $description : null,
+                'image_url'         => isset( $data['image_url'] ) ? $data['image_url'] : null,
+                'dealer_price_ht'   => isset( $data['dealer_price_ht'] ) ? $data['dealer_price_ht'] : null,
+                'stock_level'       => isset( $data['stock_level'] ) ? $data['stock_level'] : null,
+                'stock_description' => isset( $data['stock_description'] ) ? $data['stock_description'] : null,
+            );
+
+            // Formats
+            $formats = array(
+                '%s', // product_code
+                '%s', // new_part_number
+                '%s', // name
+                '%s', // description
+                '%s', // image_url
+                '%f', // dealer_price_ht
+                '%d', // stock_level
+                '%s', // stock_description
+            );
+
+            $wpdb->replace( $this->table_name, $fields, $formats );
+            $count++;
+        }
+
+        return $count;
+    }
+}
