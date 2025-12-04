@@ -92,7 +92,8 @@ class BihrWI_API_Client {
     public function start_catalog_generation( $catalog_path ) {
         $token = $this->get_token();
 
-        $url = $this->base_url . '/Catalog/LZMA/CSV/' . ltrim( $catalog_path, '/' );
+        // L'API attend le format: /Catalog/ZIP/CSV/{CatalogName}/Full
+        $url = $this->base_url . '/Catalog/ZIP/CSV/' . ltrim( $catalog_path, '/' ) . '/Full';
         $this->logger->log( 'Catalog: démarrage génération -> ' . $url );
 
         $response = wp_remote_post(

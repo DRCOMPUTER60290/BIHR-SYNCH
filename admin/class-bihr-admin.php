@@ -297,8 +297,8 @@ class BihrWI_Admin {
         $redirect_url = add_query_arg( array( 'page' => 'bihrwi_products' ), admin_url( 'admin.php' ) );
 
         try {
-            // Démarre la génération du catalog Prices/Full
-            $ticket_id = $this->api_client->start_catalog_generation( 'Prices/Full' );
+            // Démarre la génération du catalog Prices (l'API ajoutera /Full automatiquement)
+            $ticket_id = $this->api_client->start_catalog_generation( 'Prices' );
 
             update_option(
                 'bihrwi_prices_generation',
