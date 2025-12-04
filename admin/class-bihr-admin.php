@@ -589,13 +589,18 @@ class BihrWI_Admin {
 				$ticket_id       = $this->api_client->start_catalog_generation( $path );
 				$max_attempts    = 60;
 				$attempt         = 0;
-				$status          = 'PROCESSING';
 
+				// Vérifie immédiatement le statut
+				$status_response = $this->api_client->get_catalog_status( $ticket_id );
+				$status          = strtoupper( $status_response['status'] ?? '' );
+
+				// Continue à vérifier tant que c'est en PROCESSING
 				while ( $attempt < $max_attempts && $status === 'PROCESSING' ) {
 					sleep( 5 );
 					$status_response = $this->api_client->get_catalog_status( $ticket_id );
 					$status          = strtoupper( $status_response['status'] ?? '' );
 					$attempt++;
+					$this->logger->log( "AJAX: Status {$name} (tentative {$attempt}): {$status}" );
 				}
 
 				if ( $status === 'ERROR' ) {

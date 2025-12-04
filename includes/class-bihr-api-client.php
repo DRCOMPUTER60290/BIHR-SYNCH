@@ -172,9 +172,17 @@ class BihrWI_API_Client {
             throw new Exception( 'Réponse status invalide (pas JSON).' );
         }
 
-        // Compat : certains exemples parlent de "requestStatus"
-        if ( isset( $data['requestStatus'] ) && ! isset( $data['status'] ) ) {
+        // Compat : normalise les clés en minuscules pour compatibilité
+        // L'API Bihr retourne parfois RequestStatus, parfois requestStatus, parfois status
+        if ( isset( $data['RequestStatus'] ) && ! isset( $data['status'] ) ) {
+            $data['status'] = $data['RequestStatus'];
+        } elseif ( isset( $data['requestStatus'] ) && ! isset( $data['status'] ) ) {
             $data['status'] = $data['requestStatus'];
+        }
+
+        // Même chose pour DownloadId
+        if ( isset( $data['DownloadId'] ) && ! isset( $data['downloadId'] ) ) {
+            $data['downloadId'] = $data['DownloadId'];
         }
 
         return $data;
