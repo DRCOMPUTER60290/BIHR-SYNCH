@@ -1,0 +1,101 @@
+/* Styles pour les barres de progression */
+.bihr-progress-container {
+    display: none;
+    margin: 20px 0;
+    padding: 15px;
+    background: #f0f0f1;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.bihr-progress-bar-wrapper {
+    width: 100%;
+    height: 30px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    position: relative;
+}
+
+.bihr-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #2271b1, #135e96);
+    transition: width 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.bihr-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent
+    );
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.bihr-progress-bar.complete {
+    background: linear-gradient(90deg, #00a32a, #008a20);
+}
+
+.bihr-progress-bar.complete::after {
+    display: none;
+}
+
+.bihr-progress-bar.error {
+    background: linear-gradient(90deg, #d63638, #b32d2e);
+}
+
+.bihr-progress-bar.error::after {
+    display: none;
+}
+
+.bihr-progress-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+    text-align: center;
+}
+
+/* Amélioration des boutons */
+.button.large {
+    height: auto !important;
+    padding: 12px 24px !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+}
+
+/* Sections avec bordures */
+.bihr-section {
+    padding: 20px;
+    margin-bottom: 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.bihr-section h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #c3c4c7;
+}

@@ -122,33 +122,49 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
 
     <h2>1. Fusion des catalogues CSV</h2>
 
-    <h3>Option A : Téléchargement automatique depuis l'API Bihr</h3>
-    <p>
-        Télécharge automatiquement les catalogues <code>ExtendedReferences</code>, <code>Attributes</code>, 
-        <code>Images</code> et <code>Stocks</code> depuis l'API Bihr et les extrait dans le dossier d'import.
-        <br><strong>⚠️ Cette opération peut prendre plusieurs minutes.</strong>
-    </p>
+    <div class="bihr-section">
+        <h3>Option A : Téléchargement automatique depuis l'API Bihr</h3>
+        <p>
+            Télécharge automatiquement les catalogues <code>ExtendedReferences</code>, <code>Attributes</code>, 
+            <code>Images</code> et <code>Stocks</code> depuis l'API Bihr et les extrait dans le dossier d'import.
+            <br><strong>⚠️ Cette opération peut prendre plusieurs minutes.</strong>
+        </p>
 
-    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-        <?php wp_nonce_field( 'bihrwi_download_all_action', 'bihrwi_download_all_nonce' ); ?>
-        <input type="hidden" name="action" value="bihrwi_download_all_catalogs" />
-        <?php submit_button( '📥 Télécharger tous les catalogues (ExtendedReferences, Attributes, Images, Stocks)', 'primary large' ); ?>
-    </form>
+        <form method="post" id="bihr-download-all-form" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+            <?php wp_nonce_field( 'bihrwi_download_all_action', 'bihrwi_download_all_nonce' ); ?>
+            <input type="hidden" name="action" value="bihrwi_download_all_catalogs" />
+            <?php submit_button( '📥 Télécharger tous les catalogues (ExtendedReferences, Attributes, Images, Stocks)', 'primary large', 'submit', false ); ?>
+        </form>
 
-    <hr style="margin: 20px 0;" />
+        <div id="bihr-download-progress" class="bihr-progress-container">
+            <div class="bihr-progress-bar-wrapper">
+                <div id="bihr-download-progress-bar" class="bihr-progress-bar"></div>
+            </div>
+            <div id="bihr-download-progress-text" class="bihr-progress-text">Initialisation...</div>
+        </div>
+    </div>
 
-    <h3>Option B : Import manuel des fichiers CSV</h3>
-    <p>
-        Place tous les fichiers CSV Bihr (<code>references</code>, <code>extendedreferences</code>, 
-        <code>prices</code>, <code>images</code>, <code>inventory</code>, <code>attributes</code>) dans
-        <code>wp-content/uploads/bihr-import/</code>, puis clique sur le bouton ci-dessous.
-    </p>
+    <div class="bihr-section">
+        <h3>Option B : Import manuel des fichiers CSV</h3>
+        <p>
+            Place tous les fichiers CSV Bihr (<code>references</code>, <code>extendedreferences</code>, 
+            <code>prices</code>, <code>images</code>, <code>inventory</code>, <code>attributes</code>) dans
+            <code>wp-content/uploads/bihr-import/</code>, puis clique sur le bouton ci-dessous.
+        </p>
 
-    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-        <?php wp_nonce_field( 'bihrwi_merge_catalogs_action', 'bihrwi_merge_catalogs_nonce' ); ?>
-        <input type="hidden" name="action" value="bihrwi_merge_catalogs" />
-        <?php submit_button( 'Fusionner les catalogues', 'secondary' ); ?>
-    </form>
+        <form method="post" id="bihr-merge-form" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+            <?php wp_nonce_field( 'bihrwi_merge_catalogs_action', 'bihrwi_merge_catalogs_nonce' ); ?>
+            <input type="hidden" name="action" value="bihrwi_merge_catalogs" />
+            <?php submit_button( 'Fusionner les catalogues', 'secondary', 'submit', false ); ?>
+        </form>
+
+        <div id="bihr-merge-progress" class="bihr-progress-container">
+            <div class="bihr-progress-bar-wrapper">
+                <div id="bihr-merge-progress-bar" class="bihr-progress-bar"></div>
+            </div>
+            <div id="bihr-merge-progress-text" class="bihr-progress-text">Initialisation...</div>
+        </div>
+    </div>
 
     <!-- Bouton pour effacer les données -->
     <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top:10px;" onsubmit="return confirm('Êtes-vous sûr de vouloir effacer toutes les données de la table wp_bihr_products ?');">
