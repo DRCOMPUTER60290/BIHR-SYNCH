@@ -109,7 +109,7 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
             $catalogs = isset( $_GET['bihrwi_catalogs_count'] ) ? intval( $_GET['bihrwi_catalogs_count'] ) : 0;
             $files = intval( $_GET['bihrwi_files_count'] );
             echo $catalogs > 0 ? $catalogs . ' catalogue(s) téléchargé(s), ' : '';
-            echo $files . ' fichier(s) XML extrait(s) dans le dossier d\'import.';
+            echo $files . ' fichier(s) CSV extrait(s) dans le dossier d\'import.';
             ?>
         </p></div>
     <?php endif; ?>
@@ -123,10 +123,10 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
 
 
     <!-- =========================================================
-         1. FUSION DES CATALOGUES XML
+         1. FUSION DES CATALOGUES CSV
     ========================================================== -->
 
-    <h2>1. Fusion des catalogues XML</h2>
+    <h2>1. Fusion des catalogues CSV</h2>
 
     <div class="bihr-section">
         <h3>Option A : Téléchargement automatique depuis l'API Bihr</h3>
@@ -151,9 +151,9 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
     </div>
 
     <div class="bihr-section">
-        <h3>Option B : Import manuel des fichiers XML</h3>
+        <h3>Option B : Import manuel des fichiers CSV</h3>
         <p>
-            Place tous les fichiers XML Bihr (<code>references</code>, <code>extendedreferences</code>, 
+            Place tous les fichiers CSV Bihr (<code>references</code>, <code>extendedreferences</code>, 
             <code>prices</code>, <code>images</code>, <code>inventory</code>, <code>attributes</code>) dans
             <code>wp-content/uploads/bihr-import/</code>, puis clique sur le bouton ci-dessous.
         </p>

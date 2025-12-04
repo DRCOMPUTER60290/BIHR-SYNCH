@@ -316,14 +316,6 @@ class BihrWI_Product_Sync {
 
         $this->logger->log( 'Fusion catalogues: fichiers trouvés = ' . print_r( $files, true ) );
 
-        // Vérifier si au moins un fichier a été trouvé
-        $files_found = array_filter( $files );
-        if ( empty( $files_found ) ) {
-            $this->logger->log( 'ERREUR: Aucun fichier XML trouvé dans ' . $upload_dir );
-            $this->logger->log( 'Contenu du dossier: ' . print_r( scandir( $upload_dir ), true ) );
-            return 0;
-        }
-
         $references_data         = array();
         $extendedreferences_data = array();
         $prices_data             = array();
@@ -332,27 +324,27 @@ class BihrWI_Product_Sync {
         $attributes_data         = array();
 
         if ( ! empty( $files['references'] ) ) {
-            $references_data = $this->parse_references_xml( $files['references'] );
+            $references_data = $this->parse_references_csv( $files['references'] );
         }
 
         if ( ! empty( $files['extendedreferences'] ) ) {
-            $extendedreferences_data = $this->parse_extendedreferences_xml( $files['extendedreferences'] );
+            $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
         }
 
         if ( ! empty( $files['prices'] ) ) {
-            $prices_data = $this->parse_prices_xml( $files['prices'] );
+            $prices_data = $this->parse_prices_csv( $files['prices'] );
         }
 
         if ( ! empty( $files['images'] ) ) {
-            $images_data = $this->parse_images_xml( $files['images'] );
+            $images_data = $this->parse_images_csv( $files['images'] );
         }
 
         if ( ! empty( $files['inventory'] ) ) {
-            $inventory_data = $this->parse_inventory_xml( $files['inventory'] );
+            $inventory_data = $this->parse_inventory_csv( $files['inventory'] );
         }
 
         if ( ! empty( $files['attributes'] ) ) {
-            $attributes_data = $this->parse_attributes_xml( $files['attributes'] );
+            $attributes_data = $this->parse_attributes_csv( $files['attributes'] );
         }
 
         // Fusion par code produit
@@ -412,10 +404,10 @@ class BihrWI_Product_Sync {
     }
 
     /**
-     * Trouve le fichier XML le plus récent contenant un mot clé
+     * Trouve le fichier CSV le plus récent contenant un mot clé
      */
     protected function find_latest_catalog_file( $dir, $keyword ) {
-        $pattern = trailingslashit( $dir ) . '*' . $keyword . '*.xml';
+        $pattern = trailingslashit( $dir ) . '*' . $keyword . '*.csv';
 
         $files = glob( $pattern );
         if ( empty( $files ) ) {
@@ -504,326 +496,252 @@ class BihrWI_Product_Sync {
     /* ======== PARSING DES DIFFÉRENTS CATALOGUES ======== */
 
     /**
-     * Parsing du catalog References (XML)
-     * Structure : <References><Reference><ProductCode/><NewPartNumber/><ShortDescription/><FurtherDescription/>...</Reference></References>
+     * Parsing du catalog References
+     * Fichier : ProductCode, NewPartNumber, ShortDescription, FurtherDescription, ...
      */
-    protected function parse_references_xml( $file_path ) {
-        $this->logger->log( 'Parsing References XML : ' . $file_path );
+    protected function parse_references_csv( $file_path ) {
+        $this->logger->log( 'Parsing References CSV : ' . $file_path );
 
+        $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
-        $reader = new XMLReader();
-        
-        if ( ! $reader->open( $file_path ) ) {
-            $this->logger->log( 'Erreur : impossible d\'ouvrir le fichier XML : ' . $file_path );
-            return $result;
-        }
 
-        $element_count = 0;
-        $first_element_logged = false;
-
-        while ( $reader->read() ) {
-            // Log du premier élément racine pour debug
-            if ( ! $first_element_logged && $reader->nodeType === XMLReader::ELEMENT && $reader->depth === 0 ) {
-                $this->logger->log( 'Élément racine XML: ' . $reader->name );
-                $first_element_logged = true;
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
             }
 
-            if ( $reader->nodeType === XMLReader::ELEMENT && $reader->name === 'Reference' ) {
-                $element_count++;
-                $xml_string = $reader->readOuterXml();
-                
-                // Log du premier élément pour voir la structure
-                if ( $element_count === 1 ) {
-                    $this->logger->log( 'Premier élément Reference XML (tronqué à 500 chars): ' . substr( $xml_string, 0, 500 ) );
-                }
-                
-                $node = simplexml_load_string( $xml_string );
-                
-                if ( $node === false ) {
-                    $this->logger->log( 'Erreur simplexml_load_string pour Reference' );
-                    continue;
-                }
-                
-                $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
-                if ( empty( $code ) ) {
-                    // Log des propriétés disponibles pour debug
-                    if ( $element_count === 1 ) {
-                        $properties = array();
-                        foreach ( $node->children() as $child ) {
-                            $properties[] = $child->getName();
-                        }
-                        $this->logger->log( 'Propriétés disponibles dans Reference: ' . implode( ', ', $properties ) );
-                    }
-                    continue;
-                }
+            $new_part_number = isset( $row['newpartnumber'] ) ? trim( $row['newpartnumber'] ) : '';
+            $name            = '';
 
-                $new_part_number = isset( $node->NewPartNumber ) ? (string) $node->NewPartNumber : '';
-                $short_desc      = isset( $node->ShortDescription ) ? (string) $node->ShortDescription : '';
-                $further_desc    = isset( $node->FurtherDescription ) ? (string) $node->FurtherDescription : '';
-
-                $name = $short_desc ?: ( $further_desc ?: '' );
-                $description = $further_desc ?: '';
-
-                $result[ $code ] = array(
-                    'product_code'    => $code,
-                    'new_part_number' => $new_part_number ?: null,
-                    'name'            => $name ?: null,
-                    'description'     => $description ?: null,
-                );
+            if ( ! empty( $row['shortdescription'] ) ) {
+                $name = trim( $row['shortdescription'] );
+            } elseif ( ! empty( $row['furtherdescription'] ) ) {
+                $name = trim( $row['furtherdescription'] );
             }
+
+            $description = '';
+            if ( ! empty( $row['furtherdescription'] ) ) {
+                $description = trim( $row['furtherdescription'] );
+            }
+
+            $result[ $code ] = array(
+                'product_code'    => $code,
+                'new_part_number' => $new_part_number ?: null,
+                'name'            => $name ?: null,
+                'description'     => $description ?: null,
+            );
         }
 
-        $reader->close();
-        $this->logger->log( 'Parsing References: ' . count( $result ) . ' éléments parsés sur ' . $element_count . ' éléments Reference trouvés.' );
+        $this->logger->log( 'Parsing References: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }
 
     /**
-     * Parsing du catalog ExtendedReferences (XML)
-     * Structure : <ExtendedReferences><ExtendedReference><ProductCode/><LongDescription/><TechnicalDescription/>...</ExtendedReference></ExtendedReferences>
+     * Parsing du catalog ExtendedReferences
+     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, ...
      */
-    protected function parse_extendedreferences_xml( $file_path ) {
-        $this->logger->log( 'Parsing ExtendedReferences XML : ' . $file_path );
+    protected function parse_extendedreferences_csv( $file_path ) {
+        $this->logger->log( 'Parsing ExtendedReferences CSV : ' . $file_path );
 
+        $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
-        $reader = new XMLReader();
-        
-        if ( ! $reader->open( $file_path ) ) {
-            $this->logger->log( 'Erreur : impossible d\'ouvrir le fichier XML : ' . $file_path );
-            return $result;
-        }
 
-        while ( $reader->read() ) {
-            if ( $reader->nodeType === XMLReader::ELEMENT && $reader->name === 'ExtendedReference' ) {
-                $node = simplexml_load_string( $reader->readOuterXml() );
-                
-                $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
-                if ( empty( $code ) ) {
-                    continue;
-                }
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
+            }
 
-                $long_desc      = isset( $node->LongDescription ) ? (string) $node->LongDescription : '';
-                $tech_desc      = isset( $node->TechnicalDescription ) ? (string) $node->TechnicalDescription : '';
-                $desc           = isset( $node->Description ) ? (string) $node->Description : '';
-                $further_desc   = isset( $node->FurtherDescription ) ? (string) $node->FurtherDescription : '';
-                $short_desc     = isset( $node->ShortDescription ) ? (string) $node->ShortDescription : '';
-                $name_field     = isset( $node->Name ) ? (string) $node->Name : '';
+            // Tentative de récupération de la description la plus complète
+            $description = '';
+            
+            // Priorité : LongDescription > TechnicalDescription > Description > FurtherDescription
+            if ( ! empty( $row['longdescription'] ) ) {
+                $description = trim( $row['longdescription'] );
+            } elseif ( ! empty( $row['technicaldescription'] ) ) {
+                $description = trim( $row['technicaldescription'] );
+            } elseif ( ! empty( $row['description'] ) ) {
+                $description = trim( $row['description'] );
+            } elseif ( ! empty( $row['furtherdescription'] ) ) {
+                $description = trim( $row['furtherdescription'] );
+            }
 
-                // Priorité : LongDescription > TechnicalDescription > Description > FurtherDescription
-                $description = $long_desc ?: ( $tech_desc ?: ( $desc ?: ( $further_desc ?: '' ) ) );
-                $name = $short_desc ?: ( $name_field ?: '' );
+            // Nom court si disponible
+            $name = '';
+            if ( ! empty( $row['shortdescription'] ) ) {
+                $name = trim( $row['shortdescription'] );
+            } elseif ( ! empty( $row['name'] ) ) {
+                $name = trim( $row['name'] );
+            }
 
-                $result[ $code ] = array(
-                    'description' => $description ?: null,
-                );
+            $result[ $code ] = array(
+                'description' => $description ?: null,
+            );
 
-                // On n'écrase le nom que s'il est défini dans ExtendedReferences
-                if ( $name ) {
-                    $result[ $code ]['name'] = $name;
-                }
+            // On n'écrase le nom que s'il est défini dans ExtendedReferences
+            if ( $name ) {
+                $result[ $code ]['name'] = $name;
             }
         }
 
-        $reader->close();
-        $this->logger->log( 'Parsing ExtendedReferences: ' . count( $result ) . ' éléments.' );
+        $this->logger->log( 'Parsing ExtendedReferences: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }
 
     /**
-     * Parsing du catalog Prices (XML)
-     * Structure : <Prices><Price><ProductCode/><DealerPrice/>...</Price></Prices>
+     * Parsing du catalog Prices
+     * Fichier : ProductCode, DealerPrice, ...
      */
-    protected function parse_prices_xml( $file_path ) {
-        $this->logger->log( 'Parsing Prices XML : ' . $file_path );
+    protected function parse_prices_csv( $file_path ) {
+        $this->logger->log( 'Parsing Prices CSV : ' . $file_path );
 
+        $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
-        $reader = new XMLReader();
-        
-        if ( ! $reader->open( $file_path ) ) {
-            $this->logger->log( 'Erreur : impossible d\'ouvrir le fichier XML : ' . $file_path );
-            return $result;
-        }
 
-        while ( $reader->read() ) {
-            if ( $reader->nodeType === XMLReader::ELEMENT && $reader->name === 'Price' ) {
-                $node = simplexml_load_string( $reader->readOuterXml() );
-                
-                $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
-                if ( empty( $code ) ) {
-                    continue;
-                }
-
-                $dealer_price = isset( $node->DealerPrice ) ? (string) $node->DealerPrice : '';
-                if ( empty( $dealer_price ) ) {
-                    $dealer_price = isset( $node->DealerPriceHT ) ? (string) $node->DealerPriceHT : '';
-                }
-
-                if ( empty( $dealer_price ) ) {
-                    continue;
-                }
-
-                $price = (float) str_replace( ',', '.', $dealer_price );
-
-                $result[ $code ] = array(
-                    'dealer_price_ht' => $price,
-                );
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
             }
+
+            // Colonne DealerPrice, parfois DealerPriceHT, etc.
+            $price = null;
+            if ( isset( $row['dealerprice'] ) && $row['dealerprice'] !== '' ) {
+                $price = (float) str_replace( ',', '.', $row['dealerprice'] );
+            } elseif ( isset( $row['dealerpriceht'] ) && $row['dealerpriceht'] !== '' ) {
+                $price = (float) str_replace( ',', '.', $row['dealerpriceht'] );
+            }
+
+            if ( $price === null ) {
+                continue;
+            }
+
+            $result[ $code ] = array(
+                'dealer_price_ht' => $price,
+            );
         }
 
-        $reader->close();
-        $this->logger->log( 'Parsing Prices: ' . count( $result ) . ' éléments.' );
+        $this->logger->log( 'Parsing Prices: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }
 
     /**
-     * Parsing du catalog Images (XML)
-     * Structure : <Images><Image><ProductCode/><Url/><IsDefault/>...</Image></Images>
+     * Parsing du catalog Images
+     * On récupère simplement le chemin (colonne Url) sans préfixe.
+     * Le préfixe https://api.mybihr.com sera ajouté plus tard.
+     * Fichier : ProductCode, Url, IsDefault, NewPartNumber
      */
-    protected function parse_images_xml( $file_path ) {
-        $this->logger->log( 'Parsing Images XML : ' . $file_path );
+    protected function parse_images_csv( $file_path ) {
+        $this->logger->log( 'Parsing Images CSV : ' . $file_path );
 
+        $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
-        $reader = new XMLReader();
-        
-        if ( ! $reader->open( $file_path ) ) {
-            $this->logger->log( 'Erreur : impossible d\'ouvrir le fichier XML : ' . $file_path );
-            return $result;
-        }
 
-        while ( $reader->read() ) {
-            if ( $reader->nodeType === XMLReader::ELEMENT && $reader->name === 'Image' ) {
-                $node = simplexml_load_string( $reader->readOuterXml() );
-                
-                $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
-                if ( empty( $code ) ) {
-                    continue;
-                }
-
-                $url_path = isset( $node->Url ) ? (string) $node->Url : '';
-                if ( empty( $url_path ) ) {
-                    continue;
-                }
-
-                // Si une image existe déjà pour ce code, on ne la remplace pas
-                if ( isset( $result[ $code ] ) ) {
-                    continue;
-                }
-
-                $result[ $code ] = array(
-                    'image_url' => $url_path,
-                );
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
             }
+
+            // Colonne URL du CSV (en minuscules -> 'url')
+            $url_path = isset( $row['url'] ) ? trim( $row['url'] ) : '';
+            if ( $url_path === '' ) {
+                continue;
+            }
+
+            // Colonne IsDefault (facultative) :
+            // On ne filtre pas sur ce champ pour l'instant,
+            // on prendra simplement la première image trouvée pour chaque produit.
+
+            // Si une image existe déjà pour ce code, on ne la remplace pas
+            if ( isset( $result[ $code ] ) ) {
+                continue;
+            }
+
+            $result[ $code ] = array(
+                'image_url' => $url_path, // chemin brut, sans préfixe
+            );
         }
 
-        $reader->close();
-        $this->logger->log( 'Parsing Images: ' . count( $result ) . ' éléments.' );
+        $this->logger->log( 'Parsing Images: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }
 
     /**
-     * Parsing du catalog Inventory (Stock) (XML)
-     * Structure : <Inventory><Stock><ProductCode/><StockLevel/><StockLevelDescription/>...</Stock></Inventory>
+     * Parsing du catalog Inventory (Stock)
+     * Fichier : ProductId, StockLevel, StockLevelDescription, NewPartNumber
      */
-    protected function parse_inventory_xml( $file_path ) {
-        $this->logger->log( 'Parsing Inventory XML : ' . $file_path );
+    protected function parse_inventory_csv( $file_path ) {
+        $this->logger->log( 'Parsing Inventory CSV : ' . $file_path );
 
+        $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
-        $reader = new XMLReader();
-        
-        if ( ! $reader->open( $file_path ) ) {
-            $this->logger->log( 'Erreur : impossible d\'ouvrir le fichier XML : ' . $file_path );
-            return $result;
-        }
 
-        while ( $reader->read() ) {
-            if ( $reader->nodeType === XMLReader::ELEMENT && ( $reader->name === 'Stock' || $reader->name === 'Inventory' ) ) {
-                $node = simplexml_load_string( $reader->readOuterXml() );
-                
-                $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
-                if ( empty( $code ) && isset( $node->ProductId ) ) {
-                    $code = (string) $node->ProductId;
-                }
-                if ( empty( $code ) ) {
-                    continue;
-                }
-
-                $stock_level = isset( $node->StockLevel ) ? (int) $node->StockLevel : null;
-                $stock_description = isset( $node->StockLevelDescription ) ? (string) $node->StockLevelDescription : '';
-
-                $result[ $code ] = array(
-                    'stock_level'       => $stock_level,
-                    'stock_description' => $stock_description ?: null,
-                );
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
             }
+
+            $stock_level       = isset( $row['stocklevel'] ) ? (int) $row['stocklevel'] : null;
+            $stock_description = isset( $row['stockleveldescription'] ) ? trim( $row['stockleveldescription'] ) : '';
+
+            $result[ $code ] = array(
+                'stock_level'       => $stock_level,
+                'stock_description' => $stock_description ?: null,
+            );
         }
 
-        $reader->close();
-        $this->logger->log( 'Parsing Inventory: ' . count( $result ) . ' éléments.' );
+        $this->logger->log( 'Parsing Inventory: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }
 
     /**
-     * Parsing du catalog Attributes (XML) (optionnel)
-     * Structure : <Attributes><Attribute><ProductCode/><AttributeName/><AttributeValue/>...</Attribute></Attributes>
+     * Parsing du catalog Attributes (optionnel)
+     * Ici, on se contente de concaténer les attributs dans la description.
      */
-    protected function parse_attributes_xml( $file_path ) {
-        $this->logger->log( 'Parsing Attributes XML : ' . $file_path );
+    protected function parse_attributes_csv( $file_path ) {
+        $this->logger->log( 'Parsing Attributes CSV : ' . $file_path );
 
+        $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
-        $reader = new XMLReader();
-        
-        if ( ! $reader->open( $file_path ) ) {
-            $this->logger->log( 'Erreur : impossible d\'ouvrir le fichier XML : ' . $file_path );
-            return $result;
-        }
 
-        while ( $reader->read() ) {
-            if ( $reader->nodeType === XMLReader::ELEMENT && $reader->name === 'Attribute' ) {
-                $node = simplexml_load_string( $reader->readOuterXml() );
-                
-                $code = isset( $node->ProductCode ) ? (string) $node->ProductCode : '';
-                if ( empty( $code ) ) {
-                    continue;
-                }
-
-                // On concatène tous les éléments enfants (sauf ProductCode) en texte
-                $parts = array();
-                foreach ( $node->children() as $child ) {
-                    $name = $child->getName();
-                    if ( in_array( $name, array( 'ProductCode', 'ProductId', 'Code' ), true ) ) {
-                        continue;
-                    }
-                    $value = (string) $child;
-                    if ( empty( $value ) ) {
-                        continue;
-                    }
-                    $parts[] = $name . '=' . $value;
-                }
-
-                if ( empty( $parts ) ) {
-                    continue;
-                }
-
-                $attr_text = 'Attributs Bihr : ' . implode( ' | ', $parts );
-
-                // Si plusieurs attributs pour le même produit, on les concatène
-                if ( isset( $result[ $code ] ) ) {
-                    $result[ $code ]['attributes_text'] .= ' | ' . $attr_text;
-                } else {
-                    $result[ $code ] = array(
-                        'attributes_text' => $attr_text,
-                    );
-                }
+        foreach ( $rows as $row ) {
+            $code = $this->get_product_code_from_row( $row );
+            if ( $code === '' ) {
+                continue;
             }
+
+            // On concatène grossièrement tous les champs (sauf le code) en texte
+            $parts = array();
+            foreach ( $row as $key => $value ) {
+                if ( in_array( $key, array( 'productcode', 'productid', 'code' ), true ) ) {
+                    continue;
+                }
+                if ( $value === '' ) {
+                    continue;
+                }
+                $parts[] = $key . '=' . $value;
+            }
+
+            if ( empty( $parts ) ) {
+                continue;
+            }
+
+            $attr_text = 'Attributs Bihr : ' . implode( ' | ', $parts );
+
+            $result[ $code ] = array(
+                'attributes_text' => $attr_text,
+            );
         }
 
-        $reader->close();
-        $this->logger->log( 'Parsing Attributes: ' . count( $result ) . ' éléments.' );
+        $this->logger->log( 'Parsing Attributes: ' . count( $result ) . ' lignes.' );
 
         return $result;
     }
@@ -909,11 +827,11 @@ class BihrWI_Product_Sync {
             return 0;
         }
 
-        // Compte les fichiers XML extraits
-        $xml_files = glob( $import_dir . '*.xml' );
-        $count     = count( $xml_files );
+        // Compte les fichiers CSV extraits
+        $csv_files = glob( $import_dir . '*.csv' );
+        $count     = count( $csv_files );
 
-        $this->logger->log( "Extraction ZIP réussie: {$count} fichiers XML dans {$import_dir}" );
+        $this->logger->log( "Extraction ZIP réussie: {$count} fichiers CSV dans {$import_dir}" );
 
         // Supprime le fichier ZIP après extraction
         @unlink( $zip_file );
