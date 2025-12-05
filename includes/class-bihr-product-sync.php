@@ -395,6 +395,14 @@ class BihrWI_Product_Sync {
             $merged[ $code ] = array_merge( $merged[ $code ], $row );
         }
 
+        // Log d'un exemple de produit fusionné pour debug
+        if ( ! empty( $merged ) ) {
+            $first_merged = reset( $merged );
+            $first_code = key( $merged );
+            reset( $merged );
+            $this->logger->log( 'Exemple de produit fusionné - Code: ' . $first_code . ', Name: ' . ( isset( $first_merged['name'] ) ? $first_merged['name'] : 'NULL' ) . ', Description: ' . ( isset( $first_merged['description'] ) ? substr( $first_merged['description'], 0, 50 ) : 'NULL' ) );
+        }
+
         // Écriture dans la table wp_bihr_products
         $count = $this->save_merged_products( $merged );
 
