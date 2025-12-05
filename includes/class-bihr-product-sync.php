@@ -526,9 +526,9 @@ class BihrWI_Product_Sync {
             
             // Log de la première ligne de données pour voir les valeurs
             $first_code = $this->get_product_code_from_row( $rows[0] );
+            $first_long1 = isset( $rows[0]['longdescription1'] ) ? $rows[0]['longdescription1'] : 'N/A';
             $first_short = isset( $rows[0]['shortdescription'] ) ? $rows[0]['shortdescription'] : 'N/A';
-            $first_further = isset( $rows[0]['furtherdescription'] ) ? $rows[0]['furtherdescription'] : 'N/A';
-            $this->logger->log( "Première ligne - Code: {$first_code}, ShortDescription: {$first_short}, FurtherDescription: {$first_further}" );
+            $this->logger->log( "Première ligne - Code: {$first_code}, LongDescription1: {$first_long1}, ShortDescription: {$first_short}" );
         }
 
         foreach ( $rows as $row ) {
@@ -540,7 +540,10 @@ class BihrWI_Product_Sync {
             $new_part_number = isset( $row['newpartnumber'] ) ? trim( $row['newpartnumber'] ) : '';
             $name            = '';
 
-            if ( ! empty( $row['shortdescription'] ) ) {
+            // Utiliser LongDescription1 pour le nom du produit
+            if ( ! empty( $row['longdescription1'] ) ) {
+                $name = trim( $row['longdescription1'] );
+            } elseif ( ! empty( $row['shortdescription'] ) ) {
                 $name = trim( $row['shortdescription'] );
             } elseif ( ! empty( $row['furtherdescription'] ) ) {
                 $name = trim( $row['furtherdescription'] );
