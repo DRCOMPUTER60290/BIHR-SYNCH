@@ -505,6 +505,18 @@ class BihrWI_Product_Sync {
         $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
 
+        // Log des en-têtes pour debug
+        if ( ! empty( $rows ) ) {
+            $first_row_keys = array_keys( $rows[0] );
+            $this->logger->log( 'En-têtes CSV References : ' . implode( ', ', $first_row_keys ) );
+            
+            // Log de la première ligne de données pour voir les valeurs
+            $first_code = $this->get_product_code_from_row( $rows[0] );
+            $first_short = isset( $rows[0]['shortdescription'] ) ? $rows[0]['shortdescription'] : 'N/A';
+            $first_further = isset( $rows[0]['furtherdescription'] ) ? $rows[0]['furtherdescription'] : 'N/A';
+            $this->logger->log( "Première ligne - Code: {$first_code}, ShortDescription: {$first_short}, FurtherDescription: {$first_further}" );
+        }
+
         foreach ( $rows as $row ) {
             $code = $this->get_product_code_from_row( $row );
             if ( $code === '' ) {
