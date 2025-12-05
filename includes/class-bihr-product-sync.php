@@ -325,10 +325,14 @@ class BihrWI_Product_Sync {
 
         if ( ! empty( $files['references'] ) ) {
             $references_data = $this->parse_references_csv( $files['references'] );
+        } else {
+            $this->logger->log( 'ATTENTION: Fichier References manquant - les noms de produits ne seront pas disponibles!' );
         }
 
         if ( ! empty( $files['extendedreferences'] ) ) {
             $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
+        } else {
+            $this->logger->log( 'ATTENTION: Fichier ExtendedReferences manquant - les descriptions longues ne seront pas disponibles!' );
         }
 
         if ( ! empty( $files['prices'] ) ) {
@@ -419,6 +423,7 @@ class BihrWI_Product_Sync {
 
         $files = glob( $pattern );
         if ( empty( $files ) ) {
+            $this->logger->log( "Aucun fichier trouvé pour pattern: {$pattern}" );
             return '';
         }
 
@@ -429,6 +434,7 @@ class BihrWI_Product_Sync {
             }
         );
 
+        $this->logger->log( "Fichier trouvé pour '{$keyword}': " . basename( $files[0] ) );
         return $files[0];
     }
 
