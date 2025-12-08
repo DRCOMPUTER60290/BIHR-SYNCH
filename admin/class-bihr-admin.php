@@ -585,9 +585,10 @@ class BihrWI_Admin {
             $catalogs = array(
                 'References'         => 'References',
                 'ExtendedReferences' => 'ExtendedReferences',
+                'Prices'             => 'Prices',
                 'Attributes'         => 'Attributes',
                 'Images'             => 'Images',
-                'Inventory'          => 'Inventory',
+                'Stocks'             => 'Stocks',
             );		$downloaded_files = array();
 		$failed_catalogs  = array();
 		$max_retries      = 3; // Nombre de tentatives pour chaque catalogue

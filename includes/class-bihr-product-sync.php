@@ -886,6 +886,12 @@ class BihrWI_Product_Sync {
         $csv_files = glob( $import_dir . '*.csv' );
         $count     = count( $csv_files );
 
+        // Log des noms de fichiers extraits pour debug
+        if ( $count > 0 && $count <= 15 ) {
+            $file_names = array_map( 'basename', $csv_files );
+            $this->logger->log( "Fichiers CSV extraits: " . implode( ', ', $file_names ) );
+        }
+
         $this->logger->log( "Extraction ZIP réussie: {$count} fichiers CSV dans {$import_dir}" );
 
         // Supprime le fichier ZIP après extraction
