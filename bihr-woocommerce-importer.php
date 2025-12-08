@@ -56,6 +56,7 @@ function bihrwi_activate_plugin() {
         dealer_price_ht DECIMAL(15,4) NULL,
         stock_level INT NULL,
         stock_description TEXT NULL,
+        category VARCHAR(255) NULL,
         PRIMARY KEY  (id),
         KEY product_code (product_code)
     ) $charset_collate;";

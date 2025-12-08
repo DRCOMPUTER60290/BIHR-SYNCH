@@ -300,6 +300,7 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
                 <th style="width:60px;">ID</th>
                 <th style="width:120px;">Code produit</th>
                 <th>Nom</th>
+                <th>Catégorie</th>
                 <th>Description</th>
                 <th style="width:80px;">Image</th>
                 <th style="width:80px;">Stock</th>
@@ -314,6 +315,15 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
                     <td><?php echo intval( $row->id ); ?></td>
                     <td><?php echo esc_html( $row->product_code ); ?></td>
                     <td><?php echo esc_html( $row->name ); ?></td>
+                    <td>
+                        <?php
+                        if ( ! empty( $row->category ) ) {
+                            echo esc_html( $row->category );
+                        } else {
+                            echo '&mdash;';
+                        }
+                        ?>
+                    </td>
                     <td>
                         <?php
                         $desc = $row->description;

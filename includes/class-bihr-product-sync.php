@@ -164,6 +164,15 @@ class BihrWI_Product_Sync {
             update_post_meta( $product_id_wc, '_bihr_new_part_number', $row->new_part_number );
         }
 
+        // Gestion des catégories
+        if ( ! empty( $row->category ) ) {
+            $category_ids = $this->create_or_get_category_hierarchy( $row->category );
+            if ( ! empty( $category_ids ) ) {
+                wp_set_object_terms( $product_id_wc, $category_ids, 'product_cat' );
+                $this->logger->log( 'Catégories assignées : ' . implode( ', ', $category_ids ) );
+            }
+        }
+
         // Image principale (si URL disponible)
         if ( ! empty( $row->image_url ) ) {
             $attachment_id = $this->download_and_attach_image( $row->image_url, $product_id_wc );
@@ -261,6 +270,60 @@ class BihrWI_Product_Sync {
         update_post_meta( $attachment_id, '_bihr_image_source', esc_url_raw( $image_url ) );
 
         return $attachment_id;
+    }
+
+    /**
+     * Crée ou récupère une hiérarchie de catégories WooCommerce
+     * @param string $category_path Ex: "ACCESSOIRES > Bagagerie > Sacoches de réservoir"
+     * @return array Liste des IDs de catégories créées/trouvées
+     */
+    protected function create_or_get_category_hierarchy( $category_path ) {
+        if ( empty( $category_path ) ) {
+            return array();
+        }
+
+        // Découper la chaîne par " > "
+        $categories = array_map( 'trim', explode( '>', $category_path ) );
+        $category_ids = array();
+        $parent_id = 0;
+
+        foreach ( $categories as $cat_name ) {
+            if ( empty( $cat_name ) ) {
+                continue;
+            }
+
+            // Chercher si la catégorie existe déjà avec ce parent
+            $existing_term = get_term_by( 'name', $cat_name, 'product_cat' );
+            
+            if ( $existing_term && $existing_term->parent == $parent_id ) {
+                // La catégorie existe avec le bon parent
+                $category_ids[] = $existing_term->term_id;
+                $parent_id = $existing_term->term_id;
+            } else {
+                // Créer la nouvelle catégorie
+                $term = wp_insert_term(
+                    $cat_name,
+                    'product_cat',
+                    array( 'parent' => $parent_id )
+                );
+
+                if ( is_wp_error( $term ) ) {
+                    // Si erreur "duplicate", récupérer l'ID existant
+                    if ( isset( $term->error_data['term_exists'] ) ) {
+                        $term_id = $term->error_data['term_exists'];
+                        $category_ids[] = $term_id;
+                        $parent_id = $term_id;
+                    } else {
+                        $this->logger->log( 'Erreur création catégorie "' . $cat_name . '": ' . $term->get_error_message() );
+                    }
+                } else {
+                    $category_ids[] = $term['term_id'];
+                    $parent_id = $term['term_id'];
+                }
+            }
+        }
+
+        return $category_ids;
     }
 
     /**
@@ -584,7 +647,7 @@ class BihrWI_Product_Sync {
 
     /**
      * Parsing du catalog ExtendedReferences
-     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, FurtherDescription
+     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, FurtherDescription, A, B, C, D, E, G
      */
     protected function parse_extendedreferences_csv( $file_path ) {
         $this->logger->log( 'Parsing ExtendedReferences CSV : ' . $file_path );
@@ -632,8 +695,20 @@ class BihrWI_Product_Sync {
                 $name = trim( $row['name'] );
             }
 
+            // Extraction des catégories (colonnes A, B, C, D, E, G)
+            $categories = array();
+            foreach ( array( 'a', 'b', 'c', 'd', 'e', 'g' ) as $cat_letter ) {
+                if ( isset( $row[ $cat_letter ] ) && ! empty( trim( $row[ $cat_letter ] ) ) ) {
+                    $categories[] = trim( $row[ $cat_letter ] );
+                }
+            }
+            
+            // Joindre toutes les catégories avec " > " pour créer une hiérarchie
+            $category_string = ! empty( $categories ) ? implode( ' > ', $categories ) : null;
+
             $result[ $code ] = array(
                 'description' => $description ?: null,
+                'category'    => $category_string,
             );
 
             // On écrase toujours le nom avec celui d'ExtendedReferences (priorité absolue)
@@ -882,6 +957,11 @@ class BihrWI_Product_Sync {
 
             if ( isset( $data['stock_description'] ) ) {
                 $fields['stock_description'] = $data['stock_description'];
+                $formats[] = '%s';
+            }
+
+            if ( isset( $data['category'] ) ) {
+                $fields['category'] = $data['category'];
                 $formats[] = '%s';
             }
 
