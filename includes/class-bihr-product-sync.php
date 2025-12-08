@@ -273,57 +273,37 @@ class BihrWI_Product_Sync {
     }
 
     /**
-     * Crée ou récupère une hiérarchie de catégories WooCommerce
-     * @param string $category_path Ex: "ACCESSOIRES > Bagagerie > Sacoches de réservoir"
-     * @return array Liste des IDs de catégories créées/trouvées
+     * Crée ou récupère une catégorie WooCommerce (simple, sans hiérarchie)
+     * @param string $category_name Ex: "RIDER GEAR" ou "VEHICLE PARTS & ACCESSORIES"
+     * @return array Liste contenant l'ID de la catégorie
      */
-    protected function create_or_get_category_hierarchy( $category_path ) {
-        if ( empty( $category_path ) ) {
+    protected function create_or_get_category_hierarchy( $category_name ) {
+        if ( empty( $category_name ) ) {
             return array();
         }
 
-        // Découper la chaîne par " > "
-        $categories = array_map( 'trim', explode( '>', $category_path ) );
-        $category_ids = array();
-        $parent_id = 0;
+        // Chercher si la catégorie existe déjà
+        $existing_term = get_term_by( 'name', $category_name, 'product_cat' );
+        
+        if ( $existing_term ) {
+            // La catégorie existe déjà
+            return array( $existing_term->term_id );
+        }
 
-        foreach ( $categories as $cat_name ) {
-            if ( empty( $cat_name ) ) {
-                continue;
-            }
+        // Créer la nouvelle catégorie
+        $term = wp_insert_term( $category_name, 'product_cat' );
 
-            // Chercher si la catégorie existe déjà avec ce parent
-            $existing_term = get_term_by( 'name', $cat_name, 'product_cat' );
-            
-            if ( $existing_term && $existing_term->parent == $parent_id ) {
-                // La catégorie existe avec le bon parent
-                $category_ids[] = $existing_term->term_id;
-                $parent_id = $existing_term->term_id;
+        if ( is_wp_error( $term ) ) {
+            // Si erreur "duplicate", récupérer l'ID existant
+            if ( isset( $term->error_data['term_exists'] ) ) {
+                return array( $term->error_data['term_exists'] );
             } else {
-                // Créer la nouvelle catégorie
-                $term = wp_insert_term(
-                    $cat_name,
-                    'product_cat',
-                    array( 'parent' => $parent_id )
-                );
-
-                if ( is_wp_error( $term ) ) {
-                    // Si erreur "duplicate", récupérer l'ID existant
-                    if ( isset( $term->error_data['term_exists'] ) ) {
-                        $term_id = $term->error_data['term_exists'];
-                        $category_ids[] = $term_id;
-                        $parent_id = $term_id;
-                    } else {
-                        $this->logger->log( 'Erreur création catégorie "' . $cat_name . '": ' . $term->get_error_message() );
-                    }
-                } else {
-                    $category_ids[] = $term['term_id'];
-                    $parent_id = $term['term_id'];
-                }
+                $this->logger->log( 'Erreur création catégorie "' . $category_name . '": ' . $term->get_error_message() );
+                return array();
             }
         }
 
-        return $category_ids;
+        return array( $term['term_id'] );
     }
 
     /**
@@ -646,8 +626,43 @@ class BihrWI_Product_Sync {
     }
 
     /**
+     * Mapping des codes de catégorie vers leurs noms complets
+     */
+    protected function get_category_mapping() {
+        return array(
+            'A' => 'RIDER GEAR',
+            'B' => 'VEHICLE PARTS & ACCESSORIES',
+            'C' => 'LIQUIDS & LUBRICANTS',
+            'D' => 'TIRES & ACCESSORIES',
+            'E' => 'TOOLING & WS',
+            'G' => 'OTHER PRODUCTS & SERVICES',
+        );
+    }
+
+    /**
+     * Extrait le code de catégorie depuis le nom du fichier
+     * Ex: cat-extref-full-FR01-FR001-fr-2025_12_04_01_15_01_A.csv → A
+     */
+    protected function extract_category_from_filename( $file_path ) {
+        $basename = basename( $file_path );
+        
+        // Pattern: cat-extref-full-..._X.csv où X est A, B, C, D, E ou G
+        if ( preg_match( '/_([A-G])\.csv$/i', $basename, $matches ) ) {
+            $code = strtoupper( $matches[1] );
+            $mapping = $this->get_category_mapping();
+            
+            if ( isset( $mapping[ $code ] ) ) {
+                return $mapping[ $code ];
+            }
+        }
+        
+        return null;
+    }
+
+    /**
      * Parsing du catalog ExtendedReferences
-     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, FurtherDescription, A, B, C, D, E, G
+     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, FurtherDescription
+     * Catégorie extraite depuis le nom du fichier (ex: *_A.csv = RIDER GEAR)
      */
     protected function parse_extendedreferences_csv( $file_path ) {
         $this->logger->log( 'Parsing ExtendedReferences CSV : ' . $file_path );
@@ -695,20 +710,12 @@ class BihrWI_Product_Sync {
                 $name = trim( $row['name'] );
             }
 
-            // Extraction des catégories (colonnes A, B, C, D, E, G)
-            $categories = array();
-            foreach ( array( 'a', 'b', 'c', 'd', 'e', 'g' ) as $cat_letter ) {
-                if ( isset( $row[ $cat_letter ] ) && ! empty( trim( $row[ $cat_letter ] ) ) ) {
-                    $categories[] = trim( $row[ $cat_letter ] );
-                }
-            }
-            
-            // Joindre toutes les catégories avec " > " pour créer une hiérarchie
-            $category_string = ! empty( $categories ) ? implode( ' > ', $categories ) : null;
+            // Extraction de la catégorie depuis le nom du fichier
+            $category = $this->extract_category_from_filename( $file_path );
 
             $result[ $code ] = array(
                 'description' => $description ?: null,
-                'category'    => $category_string,
+                'category'    => $category,
             );
 
             // On écrase toujours le nom avec celui d'ExtendedReferences (priorité absolue)
