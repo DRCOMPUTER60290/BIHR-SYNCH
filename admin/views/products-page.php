@@ -235,7 +235,7 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
 
     <p>
         <strong>Total :</strong> <?php echo intval( $total ); ?> produits
-        <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) ) : ?>
+        <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) || ! empty( $filter_category ) ) : ?>
             (filtrés)
         <?php endif; ?>
     </p>
@@ -281,10 +281,26 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
             </div>
 
             <div>
+                <label for="category_filter" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Catégorie
+                </label>
+                <select name="category_filter" id="category_filter">
+                    <option value="">Toutes</option>
+                    <?php if ( ! empty( $available_categories ) ) : ?>
+                        <?php foreach ( $available_categories as $cat ) : ?>
+                            <option value="<?php echo esc_attr( $cat ); ?>" <?php selected( $filter_category, $cat ); ?>>
+                                <?php echo esc_html( $cat ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </select>
+            </div>
+
+            <div>
                 <?php submit_button( 'Filtrer', 'secondary', 'submit', false ); ?>
             </div>
 
-            <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) ) : ?>
+            <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) || ! empty( $filter_category ) ) : ?>
                 <div>
                     <a href="<?php echo esc_url( admin_url( 'admin.php?page=bihrwi_products' ) ); ?>" class="button">
                         Réinitialiser

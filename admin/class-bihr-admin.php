@@ -224,13 +224,17 @@ class BihrWI_Admin {
         $per_page     = 20;
 
         // Récupération des filtres
-        $filter_search = isset( $_GET['search'] ) ? sanitize_text_field( wp_unslash( $_GET['search'] ) ) : '';
-        $filter_stock  = isset( $_GET['stock_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['stock_filter'] ) ) : '';
-        $filter_price  = isset( $_GET['price_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['price_filter'] ) ) : '';
+        $filter_search   = isset( $_GET['search'] ) ? sanitize_text_field( wp_unslash( $_GET['search'] ) ) : '';
+        $filter_stock    = isset( $_GET['stock_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['stock_filter'] ) ) : '';
+        $filter_price    = isset( $_GET['price_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['price_filter'] ) ) : '';
+        $filter_category = isset( $_GET['category_filter'] ) ? sanitize_text_field( wp_unslash( $_GET['category_filter'] ) ) : '';
 
-        $products     = $this->product_sync->get_products( $current_page, $per_page, $filter_search, $filter_stock, $filter_price );
-        $total        = $this->product_sync->get_products_count( $filter_search, $filter_stock, $filter_price );
+        $products     = $this->product_sync->get_products( $current_page, $per_page, $filter_search, $filter_stock, $filter_price, $filter_category );
+        $total        = $this->product_sync->get_products_count( $filter_search, $filter_stock, $filter_price, $filter_category );
         $total_pages  = max( 1, ceil( $total / $per_page ) );
+        
+        // Récupérer la liste des catégories disponibles pour le dropdown
+        $available_categories = $this->product_sync->get_distinct_categories();
 
         include BIHRWI_PLUGIN_DIR . 'admin/views/products-page.php';
     }

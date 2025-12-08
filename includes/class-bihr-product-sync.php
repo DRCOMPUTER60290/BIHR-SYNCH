@@ -18,10 +18,24 @@ class BihrWI_Product_Sync {
      *   LECTURE / LISTE DES PRODUITS (pour la page d’admin)
      * ======================================================= */
 
+
+    /**
+     * Récupère la liste des catégories distinctes dans la base
+     */
+    public function get_distinct_categories() {
+        global $wpdb;
+        
+        $sql = "SELECT DISTINCT category 
+                FROM {$this->table_name} 
+                WHERE category IS NOT NULL AND category != '' 
+                ORDER BY category ASC";
+        
+        return $wpdb->get_col( $sql );
+    }
     /**
      * Retourne une page de produits depuis wp_bihr_products avec filtres
      */
-    public function get_products( $page = 1, $per_page = 20, $search = '', $stock_filter = '', $price_filter = '' ) {
+    public function get_products( $page = 1, $per_page = 20, $search = '', $stock_filter = '', $price_filter = '', $category_filter = '' ) {
         global $wpdb;
 
         $offset = ( max( 1, (int) $page ) - 1 ) * max( 1, (int) $per_page );
@@ -54,6 +68,11 @@ class BihrWI_Product_Sync {
             $where[] = '(dealer_price_ht IS NULL OR dealer_price_ht = 0)';
         }
 
+        // Filtre de catégorie
+        if ( ! empty( $category_filter ) ) {
+            $where[] = $wpdb->prepare( 'category = %s', $category_filter );
+        }
+
         $where_clause = implode( ' AND ', $where );
 
         $sql = $wpdb->prepare(
@@ -68,7 +87,7 @@ class BihrWI_Product_Sync {
     /**
      * Nombre total de lignes dans wp_bihr_products avec filtres
      */
-    public function get_products_count( $search = '', $stock_filter = '', $price_filter = '' ) {
+    public function get_products_count( $search = '', $stock_filter = '', $price_filter = '', $category_filter = '' ) {
         global $wpdb;
 
         // Construction de la requête avec filtres
@@ -97,6 +116,11 @@ class BihrWI_Product_Sync {
             $where[] = 'dealer_price_ht IS NOT NULL AND dealer_price_ht > 0';
         } elseif ( $price_filter === 'without_price' ) {
             $where[] = '(dealer_price_ht IS NULL OR dealer_price_ht = 0)';
+        }
+
+        // Filtre de catégorie
+        if ( ! empty( $category_filter ) ) {
+            $where[] = $wpdb->prepare( 'category = %s', $category_filter );
         }
 
         $where_clause = implode( ' AND ', $where );
