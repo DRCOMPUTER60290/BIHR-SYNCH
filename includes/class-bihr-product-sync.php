@@ -836,31 +836,72 @@ class BihrWI_Product_Sync {
                 $description .= "\n\n" . $data['attributes_text'];
             }
 
-            // Construction des champs à enregistrer
-            $fields = array(
-                'product_code'      => $code,
-                'new_part_number'   => isset( $data['new_part_number'] ) ? $data['new_part_number'] : null,
-                'name'              => isset( $data['name'] ) ? $data['name'] : null,
-                'description'       => $description !== '' ? $description : null,
-                'image_url'         => isset( $data['image_url'] ) ? $data['image_url'] : null,
-                'dealer_price_ht'   => isset( $data['dealer_price_ht'] ) ? $data['dealer_price_ht'] : null,
-                'stock_level'       => isset( $data['stock_level'] ) ? $data['stock_level'] : null,
-                'stock_description' => isset( $data['stock_description'] ) ? $data['stock_description'] : null,
+            // Vérifier si le produit existe déjà
+            $existing = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT * FROM {$this->table_name} WHERE product_code = %s",
+                    $code
+                ),
+                ARRAY_A
             );
 
-            // Formats
-            $formats = array(
-                '%s', // product_code
-                '%s', // new_part_number
-                '%s', // name
-                '%s', // description
-                '%s', // image_url
-                '%f', // dealer_price_ht
-                '%d', // stock_level
-                '%s', // stock_description
-            );
+            // Construction des champs à enregistrer (seulement les champs présents dans $data)
+            $fields = array( 'product_code' => $code );
+            $formats = array( '%s' );
 
-            $wpdb->replace( $this->table_name, $fields, $formats );
+            // Ne mettre à jour que les champs qui sont présents dans $data
+            if ( isset( $data['new_part_number'] ) ) {
+                $fields['new_part_number'] = $data['new_part_number'];
+                $formats[] = '%s';
+            }
+
+            if ( isset( $data['name'] ) ) {
+                $fields['name'] = $data['name'];
+                $formats[] = '%s';
+            }
+
+            if ( $description !== '' ) {
+                $fields['description'] = $description;
+                $formats[] = '%s';
+            }
+
+            if ( isset( $data['image_url'] ) ) {
+                $fields['image_url'] = $data['image_url'];
+                $formats[] = '%s';
+            }
+
+            if ( isset( $data['dealer_price_ht'] ) ) {
+                $fields['dealer_price_ht'] = $data['dealer_price_ht'];
+                $formats[] = '%f';
+            }
+
+            if ( isset( $data['stock_level'] ) ) {
+                $fields['stock_level'] = $data['stock_level'];
+                $formats[] = '%d';
+            }
+
+            if ( isset( $data['stock_description'] ) ) {
+                $fields['stock_description'] = $data['stock_description'];
+                $formats[] = '%s';
+            }
+
+            if ( $existing ) {
+                // UPDATE : ne mettre à jour que les champs fournis
+                $where = array( 'product_code' => $code );
+                $where_format = array( '%s' );
+                
+                // Retirer product_code des champs à mettre à jour
+                unset( $fields['product_code'] );
+                array_shift( $formats );
+                
+                if ( ! empty( $fields ) ) {
+                    $wpdb->update( $this->table_name, $fields, $where, $formats, $where_format );
+                }
+            } else {
+                // INSERT : nouveau produit
+                $wpdb->insert( $this->table_name, $fields, $formats );
+            }
+            
             $count++;
         }
 
