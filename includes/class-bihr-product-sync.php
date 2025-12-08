@@ -725,9 +725,9 @@ class BihrWI_Product_Sync {
             
             // Log de la première ligne
             $first_code = $this->get_product_code_from_row( $rows[0] );
-            $first_further = isset( $rows[0]['furtherdescription'] ) ? substr( $rows[0]['furtherdescription'], 0, 50 ) : 'N/A';
+            $first_long1 = isset( $rows[0]['longdescription1'] ) ? substr( $rows[0]['longdescription1'], 0, 50 ) : 'N/A';
             $first_long = isset( $rows[0]['longdescription'] ) ? substr( $rows[0]['longdescription'], 0, 50 ) : 'N/A';
-            $this->logger->log( "Première ligne ExtendedRef - Code: {$first_code}, FurtherDescription: {$first_further}, LongDescription: {$first_long}" );
+            $this->logger->log( "Première ligne ExtendedRef - Code: {$first_code}, LongDescription1: {$first_long1}, LongDescription: {$first_long}" );
         }
 
         foreach ( $rows as $row ) {
@@ -748,9 +748,11 @@ class BihrWI_Product_Sync {
                 $description = trim( $row['description'] );
             }
 
-            // Nom : utiliser FurtherDescription en priorité (pour le nom du produit WooCommerce)
+            // Nom : utiliser LongDescription1 en priorité (pour le nom du produit WooCommerce)
             $name = '';
-            if ( ! empty( $row['furtherdescription'] ) ) {
+            if ( ! empty( $row['longdescription1'] ) ) {
+                $name = trim( $row['longdescription1'] );
+            } elseif ( ! empty( $row['furtherdescription'] ) ) {
                 $name = trim( $row['furtherdescription'] );
             } elseif ( ! empty( $row['shortdescription'] ) ) {
                 $name = trim( $row['shortdescription'] );
