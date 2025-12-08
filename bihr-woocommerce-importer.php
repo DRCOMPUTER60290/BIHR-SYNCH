@@ -152,7 +152,16 @@ function bihrwi_check_prices_catalog() {
 
             if ( $file_path ) {
                 $logger->log( 'CRON: Fichier Prices téléchargé : ' . $file_path );
-                // Ici tu pourras déclencher automatiquement la fusion si tu veux
+                
+                // Extraire le ZIP dans le dossier d'import
+                $product_sync = new BihrWI_Product_Sync( $logger );
+                $extracted_count = $product_sync->extract_zip_to_import_dir( $file_path );
+                
+                if ( $extracted_count > 0 ) {
+                    $logger->log( "CRON: Prices extrait avec succès - {$extracted_count} fichier(s) CSV." );
+                } else {
+                    $logger->log( 'CRON: Échec de l\'extraction du ZIP Prices.' );
+                }
             } else {
                 $logger->log( 'CRON: Échec du téléchargement du fichier Prices.' );
             }
