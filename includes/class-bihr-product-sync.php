@@ -381,7 +381,23 @@ class BihrWI_Product_Sync {
                 $this->logger->log( 'ExtendedReferences: ' . count( $all_extref_files ) . ' fichiers trouvés' );
                 foreach ( $all_extref_files as $extref_file ) {
                     $partial_data = $this->parse_extendedreferences_csv( $extref_file );
-                    $extendedreferences_data = array_merge( $extendedreferences_data, $partial_data );
+                    
+                    // Merge intelligent : ne pas écraser la catégorie si elle existe déjà
+                    foreach ( $partial_data as $code => $data ) {
+                        if ( ! isset( $extendedreferences_data[ $code ] ) ) {
+                            // Nouveau produit : on l'ajoute tel quel
+                            $extendedreferences_data[ $code ] = $data;
+                        } else {
+                            // Produit existant : on merge SAUF la catégorie si elle existe déjà
+                            foreach ( $data as $key => $value ) {
+                                if ( $key === 'category' && isset( $extendedreferences_data[ $code ]['category'] ) && ! empty( $extendedreferences_data[ $code ]['category'] ) ) {
+                                    // Garder la première catégorie trouvée
+                                    continue;
+                                }
+                                $extendedreferences_data[ $code ][ $key ] = $value;
+                            }
+                        }
+                    }
                 }
             } else {
                 $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
@@ -422,7 +438,15 @@ class BihrWI_Product_Sync {
             if ( ! isset( $merged[ $code ] ) ) {
                 $merged[ $code ] = array( 'product_code' => $code );
             }
-            $merged[ $code ] = array_merge( $merged[ $code ], $row );
+            
+            // Fusionner les données SAUF la catégorie si elle existe déjà
+            foreach ( $row as $key => $value ) {
+                // Ne pas écraser la catégorie si elle est déjà définie
+                if ( $key === 'category' && isset( $merged[ $code ]['category'] ) && ! empty( $merged[ $code ]['category'] ) ) {
+                    continue;
+                }
+                $merged[ $code ][ $key ] = $value;
+            }
         }
 
         // On ajoute ce qui n’est pas encore présent
