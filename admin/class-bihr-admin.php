@@ -585,7 +585,6 @@ class BihrWI_Admin {
             $catalogs = array(
                 'References'         => 'References',
                 'ExtendedReferences' => 'ExtendedReferences',
-                'Prices'             => 'Prices',
                 'Attributes'         => 'Attributes',
                 'Images'             => 'Images',
                 'Stocks'             => 'Stocks',
