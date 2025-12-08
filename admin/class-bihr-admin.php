@@ -599,6 +599,10 @@ class BihrWI_Admin {
 
 			try {
 				$ticket_id       = $this->api_client->start_catalog_generation( $path );
+				
+				// Attendre 2 secondes avant de vérifier le statut (rate limit: 1/sec)
+				sleep( 2 );
+				
 				$max_attempts    = 120; // 120 * 5 sec = 10 minutes max
 				$attempt         = 0;
 
@@ -654,10 +658,16 @@ class BihrWI_Admin {
 
 				$downloaded_files[ $name ] = $zip_file;
 				$this->logger->log( "AJAX: Catalogue {$name} téléchargé avec succès" );
+				
+				// Attendre 2 secondes avant le prochain catalogue (rate limit: 1/sec)
+				sleep( 2 );
 
 			} catch ( Exception $catalog_error ) {
 				$this->logger->log( "AJAX: Exception pour {$name}: " . $catalog_error->getMessage() );
 				$failed_catalogs[ $name ] = $path;
+				
+				// Attendre 2 secondes même en cas d'erreur pour éviter le rate limit
+				sleep( 2 );
 			}
 		}
 
@@ -667,6 +677,12 @@ class BihrWI_Admin {
 			$retry_count++;
 			$this->logger->log( "AJAX: Nouvelle tentative ({$retry_count}/{$max_retries}) pour " . count( $failed_catalogs ) . " catalogue(s)" );
 			
+			// Attendre 15 secondes entre chaque série de réessais pour laisser l'API respirer
+			if ( $retry_count > 1 ) {
+				$this->logger->log( "AJAX: Pause de 15 secondes avant la nouvelle tentative..." );
+				sleep( 15 );
+			}
+			
 			$still_failed = array();
 
 			foreach ( $failed_catalogs as $name => $path ) {
@@ -674,6 +690,10 @@ class BihrWI_Admin {
 
 				try {
 					$ticket_id       = $this->api_client->start_catalog_generation( $path );
+					
+					// Attendre 2 secondes avant de vérifier le statut (rate limit: 1/sec)
+					sleep( 2 );
+					
 					$max_attempts    = 120; // 10 minutes max
 					$attempt         = 0;
 
@@ -723,10 +743,16 @@ class BihrWI_Admin {
 
 					$downloaded_files[ $name ] = $zip_file;
 					$this->logger->log( "AJAX: Catalogue {$name} téléchargé avec succès (après réessai)" );
+					
+					// Attendre 2 secondes avant le prochain catalogue (rate limit: 1/sec)
+					sleep( 2 );
 
 				} catch ( Exception $catalog_error ) {
 					$this->logger->log( "AJAX: Exception réessai {$name}: " . $catalog_error->getMessage() );
 					$still_failed[ $name ] = $path;
+					
+					// Attendre 2 secondes même en cas d'erreur pour éviter le rate limit
+					sleep( 2 );
 				}
 			}
 
