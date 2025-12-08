@@ -404,8 +404,11 @@ class BihrWI_Product_Sync {
             $first_merged = reset( $merged );
             $first_code = key( $merged );
             reset( $merged );
-            $this->logger->log( 'Exemple de produit fusionné - Code: ' . $first_code . ', Name: ' . ( isset( $first_merged['name'] ) ? $first_merged['name'] : 'NULL' ) . ', Description: ' . ( isset( $first_merged['description'] ) ? substr( $first_merged['description'], 0, 50 ) : 'NULL' ) );
+            $this->logger->log( 'Exemple de produit fusionné - Code: ' . $first_code . ', Name: ' . ( isset( $first_merged['name'] ) ? substr( $first_merged['name'], 0, 50 ) : 'NULL' ) . ', Stock: ' . ( isset( $first_merged['stock_level'] ) ? $first_merged['stock_level'] : 'NULL' ) . ', Description: ' . ( isset( $first_merged['description'] ) ? substr( $first_merged['description'], 0, 50 ) : 'NULL' ) );
         }
+
+        // Log des statistiques de fusion
+        $this->logger->log( 'Stats fusion - References: ' . count( $references_data ) . ', ExtendedReferences: ' . count( $extendedreferences_data ) . ', Prices: ' . count( $prices_data ) . ', Images: ' . count( $images_data ) . ', Inventory: ' . count( $inventory_data ) . ', Attributes: ' . count( $attributes_data ) );
 
         // Écriture dans la table wp_bihr_products
         $count = $this->save_merged_products( $merged );
@@ -577,6 +580,18 @@ class BihrWI_Product_Sync {
         $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
 
+        // Log des en-têtes pour debug
+        if ( ! empty( $rows ) ) {
+            $first_row_keys = array_keys( $rows[0] );
+            $this->logger->log( 'En-têtes CSV ExtendedReferences : ' . implode( ', ', $first_row_keys ) );
+            
+            // Log de la première ligne
+            $first_code = $this->get_product_code_from_row( $rows[0] );
+            $first_further = isset( $rows[0]['furtherdescription'] ) ? substr( $rows[0]['furtherdescription'], 0, 50 ) : 'N/A';
+            $first_long = isset( $rows[0]['longdescription'] ) ? substr( $rows[0]['longdescription'], 0, 50 ) : 'N/A';
+            $this->logger->log( "Première ligne ExtendedRef - Code: {$first_code}, FurtherDescription: {$first_further}, LongDescription: {$first_long}" );
+        }
+
         foreach ( $rows as $row ) {
             $code = $this->get_product_code_from_row( $row );
             if ( $code === '' ) {
@@ -710,6 +725,17 @@ class BihrWI_Product_Sync {
 
         $rows   = $this->read_csv_assoc( $file_path );
         $result = array();
+
+        // Log des en-têtes pour debug
+        if ( ! empty( $rows ) ) {
+            $first_row_keys = array_keys( $rows[0] );
+            $this->logger->log( 'En-têtes CSV Inventory : ' . implode( ', ', $first_row_keys ) );
+            
+            // Log de la première ligne
+            $first_code = $this->get_product_code_from_row( $rows[0] );
+            $first_stock = isset( $rows[0]['stocklevel'] ) ? $rows[0]['stocklevel'] : 'N/A';
+            $this->logger->log( "Première ligne Inventory - Code: {$first_code}, StockLevel: {$first_stock}" );
+        }
 
         foreach ( $rows as $row ) {
             $code = $this->get_product_code_from_row( $row );
