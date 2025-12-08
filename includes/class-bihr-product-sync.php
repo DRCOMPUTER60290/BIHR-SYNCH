@@ -463,8 +463,12 @@ class BihrWI_Product_Sync {
                 $merged[ $code ] = array( 'product_code' => $code );
             }
             
-            // Fusionner les données SAUF la catégorie si elle existe déjà
+            // Fusionner les données SAUF le nom et la catégorie s'ils existent déjà
             foreach ( $row as $key => $value ) {
+                // Ne pas écraser le nom s'il est déjà défini (priorité à References)
+                if ( $key === 'name' && isset( $merged[ $code ]['name'] ) && ! empty( $merged[ $code ]['name'] ) ) {
+                    continue;
+                }
                 // Ne pas écraser la catégorie si elle est déjà définie
                 if ( $key === 'category' && isset( $merged[ $code ]['category'] ) && ! empty( $merged[ $code ]['category'] ) ) {
                     continue;
