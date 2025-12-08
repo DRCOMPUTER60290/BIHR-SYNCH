@@ -306,8 +306,8 @@ class BihrWI_Product_Sync {
 
         // Recherche des différents fichiers (le plus récent pour chaque type)
         $files = array(
-            'references'         => $this->find_latest_catalog_file( $upload_dir, 'references' ),
-            'extendedreferences' => $this->find_latest_catalog_file( $upload_dir, 'extendedreferences' ),
+            'references'         => $this->find_latest_catalog_file( $upload_dir, 'ref' ),
+            'extendedreferences' => $this->find_latest_catalog_file( $upload_dir, 'extref' ),
             'prices'             => $this->find_latest_catalog_file( $upload_dir, 'prices' ),
             'images'             => $this->find_latest_catalog_file( $upload_dir, 'images' ),
             'inventory'          => $this->find_latest_catalog_file( $upload_dir, 'inventory' ),
@@ -330,7 +330,19 @@ class BihrWI_Product_Sync {
         }
 
         if ( ! empty( $files['extendedreferences'] ) ) {
-            $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
+            // ExtendedReferences peut être divisé en plusieurs fichiers (_A, _B, etc.)
+            $extref_pattern = str_replace( basename( $files['extendedreferences'] ), 'cat-extref-full-*.csv', $files['extendedreferences'] );
+            $all_extref_files = glob( $extref_pattern );
+            
+            if ( ! empty( $all_extref_files ) ) {
+                $this->logger->log( 'ExtendedReferences: ' . count( $all_extref_files ) . ' fichiers trouvés' );
+                foreach ( $all_extref_files as $extref_file ) {
+                    $partial_data = $this->parse_extendedreferences_csv( $extref_file );
+                    $extendedreferences_data = array_merge( $extendedreferences_data, $partial_data );
+                }
+            } else {
+                $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
+            }
         } else {
             $this->logger->log( 'ATTENTION: Fichier ExtendedReferences manquant - les descriptions longues ne seront pas disponibles!' );
         }
