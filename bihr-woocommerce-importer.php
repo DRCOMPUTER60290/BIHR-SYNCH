@@ -97,6 +97,17 @@ function bihrwi_check_prices_catalog() {
 
         $logger->log( 'CRON: Vérification du status du catalog Prices pour ticket_id=' . $ticket_id );
 
+        // Compter le nombre de tentatives pour éviter une boucle infinie
+        $attempts = isset( $status_data['attempts'] ) ? intval( $status_data['attempts'] ) : 0;
+        $attempts++;
+        
+        // Si plus de 24 tentatives (2 heures), abandonner
+        if ( $attempts > 24 ) {
+            $logger->log( 'CRON: Prices - Abandon après 24 tentatives (2 heures).' );
+            delete_option( 'bihrwi_prices_generation' );
+            return;
+        }
+
         $status_response = $api->get_catalog_status( $ticket_id );
         if ( empty( $status_response['status'] ) ) {
             $logger->log( 'CRON: Réponse status invalide pour Prices.' );
@@ -105,14 +116,22 @@ function bihrwi_check_prices_catalog() {
 
         $status = strtoupper( $status_response['status'] );
 
-        // On mémorise le dernier statut et la dernière vérification pour l’affichage dans l’admin
+        // On mémorise le dernier statut et la dernière vérification pour l'affichage dans l'admin
         $status_data['last_status']  = $status;
         $status_data['last_checked'] = current_time( 'mysql' );
+        $status_data['attempts']     = $attempts;
         update_option( 'bihrwi_prices_generation', $status_data );
 
         // Toujours en traitement côté Bihr
         if ( $status === 'PROCESSING' ) {
             $logger->log( 'CRON: Prices toujours en PROCESSING, on réessaiera plus tard.' );
+            
+            // Replanifier une nouvelle vérification dans 5 minutes
+            if ( ! wp_next_scheduled( 'bihrwi_check_prices_catalog_event' ) ) {
+                wp_schedule_single_event( time() + 300, 'bihrwi_check_prices_catalog_event' );
+                $logger->log( 'CRON: Nouvelle vérification planifiée dans 5 minutes.' );
+            }
+            
             return;
         }
 
