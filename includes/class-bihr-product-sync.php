@@ -569,7 +569,7 @@ class BihrWI_Product_Sync {
 
     /**
      * Parsing du catalog ExtendedReferences
-     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, ...
+     * Fichier : ProductCode, Description, LongDescription, TechnicalDescription, FurtherDescription
      */
     protected function parse_extendedreferences_csv( $file_path ) {
         $this->logger->log( 'Parsing ExtendedReferences CSV : ' . $file_path );
@@ -586,20 +586,20 @@ class BihrWI_Product_Sync {
             // Tentative de récupération de la description la plus complète
             $description = '';
             
-            // Priorité : LongDescription > TechnicalDescription > Description > FurtherDescription
+            // Priorité : LongDescription > TechnicalDescription > Description
             if ( ! empty( $row['longdescription'] ) ) {
                 $description = trim( $row['longdescription'] );
             } elseif ( ! empty( $row['technicaldescription'] ) ) {
                 $description = trim( $row['technicaldescription'] );
             } elseif ( ! empty( $row['description'] ) ) {
                 $description = trim( $row['description'] );
-            } elseif ( ! empty( $row['furtherdescription'] ) ) {
-                $description = trim( $row['furtherdescription'] );
             }
 
-            // Nom court si disponible
+            // Nom : utiliser FurtherDescription en priorité (pour le nom du produit WooCommerce)
             $name = '';
-            if ( ! empty( $row['shortdescription'] ) ) {
+            if ( ! empty( $row['furtherdescription'] ) ) {
+                $name = trim( $row['furtherdescription'] );
+            } elseif ( ! empty( $row['shortdescription'] ) ) {
                 $name = trim( $row['shortdescription'] );
             } elseif ( ! empty( $row['name'] ) ) {
                 $name = trim( $row['name'] );
@@ -609,7 +609,7 @@ class BihrWI_Product_Sync {
                 'description' => $description ?: null,
             );
 
-            // On n'écrase le nom que s'il est défini dans ExtendedReferences
+            // On écrase toujours le nom avec celui d'ExtendedReferences (priorité absolue)
             if ( $name ) {
                 $result[ $code ]['name'] = $name;
             }
