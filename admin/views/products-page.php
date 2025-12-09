@@ -270,14 +270,31 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
             </div>
 
             <div>
-                <label for="price_filter" style="display: block; margin-bottom: 5px; font-weight: 600;">
-                    Prix
+                <label for="price_min" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Prix minimum (€)
                 </label>
-                <select name="price_filter" id="price_filter">
-                    <option value="">Tous</option>
-                    <option value="with_price" <?php selected( $filter_price, 'with_price' ); ?>>Avec prix</option>
-                    <option value="without_price" <?php selected( $filter_price, 'without_price' ); ?>>Sans prix</option>
-                </select>
+                <input type="number" 
+                       name="price_min" 
+                       id="price_min" 
+                       value="<?php echo esc_attr( $filter_price_min ); ?>" 
+                       placeholder="0.00"
+                       step="0.01"
+                       min="0"
+                       style="width: 100%;" />
+            </div>
+
+            <div>
+                <label for="price_max" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Prix maximum (€)
+                </label>
+                <input type="number" 
+                       name="price_max" 
+                       id="price_max" 
+                       value="<?php echo esc_attr( $filter_price_max ); ?>" 
+                       placeholder="9999.99"
+                       step="0.01"
+                       min="0"
+                       style="width: 100%;" />
             </div>
 
             <div>
@@ -297,10 +314,25 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
             </div>
 
             <div>
+                <label for="sort_by" style="display: block; margin-bottom: 5px; font-weight: 600;">
+                    Trier par
+                </label>
+                <select name="sort_by" id="sort_by">
+                    <option value="">Par défaut (ID)</option>
+                    <option value="name_asc" <?php selected( $sort_by, 'name_asc' ); ?>>Nom (A → Z)</option>
+                    <option value="name_desc" <?php selected( $sort_by, 'name_desc' ); ?>>Nom (Z → A)</option>
+                    <option value="price_asc" <?php selected( $sort_by, 'price_asc' ); ?>>Prix croissant</option>
+                    <option value="price_desc" <?php selected( $sort_by, 'price_desc' ); ?>>Prix décroissant</option>
+                    <option value="stock_asc" <?php selected( $sort_by, 'stock_asc' ); ?>>Stock croissant</option>
+                    <option value="stock_desc" <?php selected( $sort_by, 'stock_desc' ); ?>>Stock décroissant</option>
+                </select>
+            </div>
+
+            <div>
                 <?php submit_button( 'Filtrer', 'secondary', 'submit', false ); ?>
             </div>
 
-            <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price ) || ! empty( $filter_category ) ) : ?>
+            <?php if ( ! empty( $filter_search ) || ! empty( $filter_stock ) || ! empty( $filter_price_min ) || ! empty( $filter_price_max ) || ! empty( $filter_category ) || ! empty( $sort_by ) ) : ?>
                 <div>
                     <a href="<?php echo esc_url( admin_url( 'admin.php?page=bihrwi_products' ) ); ?>" class="button">
                         Réinitialiser

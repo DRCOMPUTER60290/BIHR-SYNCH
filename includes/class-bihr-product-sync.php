@@ -35,7 +35,7 @@ class BihrWI_Product_Sync {
     /**
      * Retourne une page de produits depuis wp_bihr_products avec filtres
      */
-    public function get_products( $page = 1, $per_page = 20, $search = '', $stock_filter = '', $price_filter = '', $category_filter = '' ) {
+    public function get_products( $page = 1, $per_page = 20, $search = '', $stock_filter = '', $price_min = '', $price_max = '', $category_filter = '', $sort_by = '' ) {
         global $wpdb;
 
         $offset = ( max( 1, (int) $page ) - 1 ) * max( 1, (int) $per_page );
@@ -61,11 +61,12 @@ class BihrWI_Product_Sync {
             $where[] = '(stock_level = 0 OR stock_level IS NULL)';
         }
 
-        // Filtre de prix
-        if ( $price_filter === 'with_price' ) {
-            $where[] = 'dealer_price_ht IS NOT NULL AND dealer_price_ht > 0';
-        } elseif ( $price_filter === 'without_price' ) {
-            $where[] = '(dealer_price_ht IS NULL OR dealer_price_ht = 0)';
+        // Filtre de plage de prix
+        if ( ! empty( $price_min ) && is_numeric( $price_min ) ) {
+            $where[] = $wpdb->prepare( 'dealer_price_ht >= %f', floatval( $price_min ) );
+        }
+        if ( ! empty( $price_max ) && is_numeric( $price_max ) ) {
+            $where[] = $wpdb->prepare( 'dealer_price_ht <= %f', floatval( $price_max ) );
         }
 
         // Filtre de catégorie
@@ -75,8 +76,34 @@ class BihrWI_Product_Sync {
 
         $where_clause = implode( ' AND ', $where );
 
+        // Gestion du tri
+        $order_clause = 'ORDER BY id ASC'; // Par défaut
+        switch ( $sort_by ) {
+            case 'price_asc':
+                $order_clause = 'ORDER BY dealer_price_ht ASC';
+                break;
+            case 'price_desc':
+                $order_clause = 'ORDER BY dealer_price_ht DESC';
+                break;
+            case 'name_asc':
+                $order_clause = 'ORDER BY name ASC';
+                break;
+            case 'name_desc':
+                $order_clause = 'ORDER BY name DESC';
+                break;
+            case 'stock_asc':
+                $order_clause = 'ORDER BY stock_level ASC';
+                break;
+            case 'stock_desc':
+                $order_clause = 'ORDER BY stock_level DESC';
+                break;
+            default:
+                $order_clause = 'ORDER BY id ASC';
+                break;
+        }
+
         $sql = $wpdb->prepare(
-            "SELECT * FROM {$this->table_name} WHERE {$where_clause} ORDER BY id ASC LIMIT %d OFFSET %d",
+            "SELECT * FROM {$this->table_name} WHERE {$where_clause} {$order_clause} LIMIT %d OFFSET %d",
             $per_page,
             $offset
         );
@@ -87,7 +114,7 @@ class BihrWI_Product_Sync {
     /**
      * Nombre total de lignes dans wp_bihr_products avec filtres
      */
-    public function get_products_count( $search = '', $stock_filter = '', $price_filter = '', $category_filter = '' ) {
+    public function get_products_count( $search = '', $stock_filter = '', $price_min = '', $price_max = '', $category_filter = '' ) {
         global $wpdb;
 
         // Construction de la requête avec filtres
@@ -111,11 +138,12 @@ class BihrWI_Product_Sync {
             $where[] = '(stock_level = 0 OR stock_level IS NULL)';
         }
 
-        // Filtre de prix
-        if ( $price_filter === 'with_price' ) {
-            $where[] = 'dealer_price_ht IS NOT NULL AND dealer_price_ht > 0';
-        } elseif ( $price_filter === 'without_price' ) {
-            $where[] = '(dealer_price_ht IS NULL OR dealer_price_ht = 0)';
+        // Filtre de plage de prix
+        if ( ! empty( $price_min ) && is_numeric( $price_min ) ) {
+            $where[] = $wpdb->prepare( 'dealer_price_ht >= %f', floatval( $price_min ) );
+        }
+        if ( ! empty( $price_max ) && is_numeric( $price_max ) ) {
+            $where[] = $wpdb->prepare( 'dealer_price_ht <= %f', floatval( $price_max ) );
         }
 
         // Filtre de catégorie
