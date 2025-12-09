@@ -50,6 +50,9 @@ jQuery(document).ready(function($) {
         $('#bihr-select-all-checkbox').prop('checked', totalCheckboxes === checkedCheckboxes);
     });
     
+    // Initialiser le compteur au chargement de la page
+    updateSelectedCount();
+    
     // Import des produits sélectionnés
     $('#bihr-import-selected').on('click', function(e) {
         e.preventDefault();
