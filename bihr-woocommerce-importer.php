@@ -22,6 +22,7 @@ define( 'BIHRWI_IMAGE_BASE_URL', 'https://api.mybihr.com' );
 // Autochargement simple de nos classes
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-logger.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-api-client.php';
+require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-ai-enrichment.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-product-sync.php';
 require_once BIHRWI_PLUGIN_DIR . 'admin/class-bihr-admin.php';
 

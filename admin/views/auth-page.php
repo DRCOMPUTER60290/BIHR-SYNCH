@@ -33,6 +33,15 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <th scope="row"><label for="bihrwi_password">Password Bihr</label></th>
                 <td><input name="bihrwi_password" id="bihrwi_password" type="password" class="regular-text" value="<?php echo esc_attr( $password ); ?>"></td>
             </tr>
+            <tr>
+                <th scope="row"><label for="bihrwi_openai_key">Clé API OpenAI (optionnel)</label></th>
+                <td>
+                    <input name="bihrwi_openai_key" id="bihrwi_openai_key" type="password" class="regular-text" value="<?php echo esc_attr( $openai_key ); ?>">
+                    <p class="description">
+                        Si renseignée, l'IA générera automatiquement des descriptions courtes et longues lors de l'import des produits.
+                    </p>
+                </td>
+            </tr>
         </table>
 
         <?php submit_button( 'Sauvegarder & Tester l\'authentification' ); ?>

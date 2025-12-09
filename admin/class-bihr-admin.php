@@ -209,6 +209,7 @@ class BihrWI_Admin {
     public function render_auth_page() {
         $username   = get_option( 'bihrwi_username', '' );
         $password   = get_option( 'bihrwi_password', '' );
+        $openai_key = get_option( 'bihrwi_openai_key', '' );
         $last_token = get_transient( 'bihrwi_api_token' );
 
         include BIHRWI_PLUGIN_DIR . 'admin/views/auth-page.php';
@@ -252,9 +253,11 @@ class BihrWI_Admin {
 
         $username = isset( $_POST['bihrwi_username'] ) ? sanitize_text_field( wp_unslash( $_POST['bihrwi_username'] ) ) : '';
         $password = isset( $_POST['bihrwi_password'] ) ? sanitize_text_field( wp_unslash( $_POST['bihrwi_password'] ) ) : '';
+        $openai_key = isset( $_POST['bihrwi_openai_key'] ) ? sanitize_text_field( wp_unslash( $_POST['bihrwi_openai_key'] ) ) : '';
 
         update_option( 'bihrwi_username', $username );
         update_option( 'bihrwi_password', $password );
+        update_option( 'bihrwi_openai_key', $openai_key );
 
         $redirect_url = add_query_arg( array( 'page' => 'bihrwi_auth' ), admin_url( 'admin.php' ) );
 

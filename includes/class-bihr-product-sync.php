@@ -190,9 +190,57 @@ class BihrWI_Product_Sync {
         $name = $row->name ?: $row->product_code;
         $product->set_name( $name );
 
-        // Description
+        // Description de base
+        $base_description = '';
         if ( ! empty( $row->description ) ) {
-            $product->set_description( $row->description );
+            $base_description = $row->description;
+        }
+
+        // Enrichissement IA si disponible
+        $ai_enrichment = new BihrWI_AI_Enrichment( $this->logger );
+        if ( $ai_enrichment->is_enabled() ) {
+            $this->logger->log( 'Import WooCommerce: enrichissement IA activé pour ' . $row->product_code );
+            
+            // Construire l'URL complète de l'image si disponible
+            $full_image_url = '';
+            if ( ! empty( $row->image_url ) ) {
+                if ( preg_match( '#^https?://#i', $row->image_url ) ) {
+                    $full_image_url = $row->image_url;
+                } else {
+                    $full_image_url = rtrim( BIHRWI_IMAGE_BASE_URL, '/' ) . '/' . ltrim( $row->image_url, '/' );
+                }
+            }
+            
+            // Génération des descriptions enrichies
+            $ai_descriptions = $ai_enrichment->generate_descriptions( $name, $full_image_url, $row->product_code );
+            
+            if ( $ai_descriptions && is_array( $ai_descriptions ) ) {
+                // Description courte (excerpt WooCommerce)
+                if ( ! empty( $ai_descriptions['short_description'] ) ) {
+                    $product->set_short_description( $ai_descriptions['short_description'] );
+                    $this->logger->log( 'Import WooCommerce: description courte IA ajoutée' );
+                }
+                
+                // Description longue
+                if ( ! empty( $ai_descriptions['long_description'] ) ) {
+                    // On peut ajouter la description de base en complément si elle existe
+                    $long_desc = $ai_descriptions['long_description'];
+                    if ( ! empty( $base_description ) ) {
+                        $long_desc .= "\n\n<h3>Informations techniques</h3>\n" . $base_description;
+                    }
+                    $product->set_description( $long_desc );
+                    $this->logger->log( 'Import WooCommerce: description longue IA ajoutée' );
+                } else {
+                    $product->set_description( $base_description );
+                }
+            } else {
+                // Fallback sur description de base si l'IA échoue
+                $product->set_description( $base_description );
+                $this->logger->log( 'Import WooCommerce: utilisation description de base (IA échouée)' );
+            }
+        } else {
+            // Pas d'enrichissement IA
+            $product->set_description( $base_description );
         }
 
         // Prix HT (on le met comme prix catalogue – à adapter si tu veux une marge)
