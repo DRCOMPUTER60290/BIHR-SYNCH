@@ -90,29 +90,62 @@ class BihrWI_Order_Sync {
 
             if ( $result && isset( $result['success'] ) && $result['success'] ) {
                 $bihr_order_id = $result['order_id'] ?? 'N/A';
+                $bihr_ticket_id = $result['bihr_ticket_id'] ?? '';
                 
-                $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 4/6 : API BIHR - Réponse positive (BIHR ID: {$bihr_order_id})" );
+                $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 4/6 : API BIHR - Réponse positive" );
+                
+                if ( $bihr_order_id && $bihr_order_id !== 'N/A' ) {
+                    $this->logger->log( "[{$ticket_id}]    → BIHR Order ID: {$bihr_order_id}" );
+                }
+                
+                if ( $bihr_ticket_id ) {
+                    $this->logger->log( "[{$ticket_id}]    → BIHR Ticket ID: {$bihr_ticket_id}" );
+                }
+                
                 $this->logger->log( "[{$ticket_id}] 💾 ÉTAPE 5/6 : Enregistrement des métadonnées WooCommerce..." );
                 
                 // Marquer la commande comme synchronisée
                 update_post_meta( $order_id, '_bihr_order_synced', true );
                 update_post_meta( $order_id, '_bihr_order_id', $bihr_order_id );
                 update_post_meta( $order_id, '_bihr_sync_date', current_time( 'mysql' ) );
+                
+                // Enregistrer le Ticket ID BIHR si disponible
+                if ( $bihr_ticket_id ) {
+                    update_post_meta( $order_id, '_bihr_api_ticket_id', $bihr_ticket_id );
+                }
 
-                // Ajouter une note à la commande
-                $order->add_order_note( 
-                    sprintf( 
-                        __( '✅ Commande synchronisée avec BIHR%sTicket: %s%sID BIHR: %s', 'bihr-woocommerce-importer' ),
-                        "\n",
-                        $ticket_id,
-                        "\n",
-                        $bihr_order_id
-                    )
+                // Construire la note de commande
+                $note_parts = array(
+                    '✅ Commande synchronisée avec BIHR',
+                    'Ticket WC: ' . $ticket_id,
                 );
+                
+                if ( $bihr_order_id && $bihr_order_id !== 'N/A' ) {
+                    $note_parts[] = 'BIHR Order ID: ' . $bihr_order_id;
+                }
+                
+                if ( $bihr_ticket_id ) {
+                    $note_parts[] = 'BIHR Ticket ID: ' . $bihr_ticket_id;
+                }
+                
+                if ( isset( $result['result_code'] ) && $result['result_code'] ) {
+                    $note_parts[] = 'Résultat: ' . $result['result_code'];
+                }
+                
+                $order->add_order_note( implode( "\n", $note_parts ) );
                 
                 $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 5/6 : Métadonnées enregistrées" );
                 $this->logger->log( "[{$ticket_id}] 📝 ÉTAPE 6/6 : Note ajoutée à la commande WC" );
-                $this->logger->log( "[{$ticket_id}] 🎉 SYNCHRONISATION RÉUSSIE - Commande #{$order_id} → BIHR ID: {$bihr_order_id}" );
+                
+                $success_msg = "🎉 SYNCHRONISATION RÉUSSIE - Commande #{$order_id}";
+                if ( $bihr_order_id && $bihr_order_id !== 'N/A' ) {
+                    $success_msg .= " → BIHR ID: {$bihr_order_id}";
+                }
+                if ( $bihr_ticket_id ) {
+                    $success_msg .= " (Ticket: {$bihr_ticket_id})";
+                }
+                
+                $this->logger->log( "[{$ticket_id}] {$success_msg}" );
                 $this->logger->log( "─────────────────────────────────────────────────────────────" );
                 
             } else {
@@ -382,14 +415,35 @@ class BihrWI_Order_Sync {
         $this->logger->log( "[{$ticket_id}]    📄 Body: " . $body );
 
         if ( $status_code >= 200 && $status_code < 300 ) {
-            $bihr_order_id = $data['OrderId'] ?? $data['orderId'] ?? $data['order_id'] ?? 'N/A';
-            $this->logger->log( "[{$ticket_id}]    ✅ Succès - BIHR Order ID: {$bihr_order_id}" );
+            // Récupération de l'ID de commande BIHR
+            $bihr_order_id = $data['OrderId'] ?? $data['orderId'] ?? $data['order_id'] ?? '';
+            
+            // Récupération du Ticket ID BIHR pour la traçabilité
+            $bihr_ticket_id = $data['TicketId'] ?? $data['ticketId'] ?? $data['ticket_id'] ?? '';
+            
+            // Affichage des informations de succès
+            if ( $bihr_order_id ) {
+                $this->logger->log( "[{$ticket_id}]    ✅ Succès - BIHR Order ID: {$bihr_order_id}" );
+            } else {
+                $this->logger->log( "[{$ticket_id}]    ✅ Succès - Commande créée" );
+            }
+            
+            if ( $bihr_ticket_id ) {
+                $this->logger->log( "[{$ticket_id}]    🎫 BIHR Ticket ID: {$bihr_ticket_id}" );
+            }
+            
+            // Log du message de résultat si disponible
+            if ( isset( $data['ResultCode'] ) ) {
+                $this->logger->log( "[{$ticket_id}]    📋 Résultat: {$data['ResultCode']}" );
+            }
             
             return array(
-                'success'   => true,
-                'order_id'  => $bihr_order_id,
-                'data'      => $data,
-                'http_code' => $status_code,
+                'success'        => true,
+                'order_id'       => $bihr_order_id,
+                'bihr_ticket_id' => $bihr_ticket_id,
+                'result_code'    => $data['ResultCode'] ?? '',
+                'data'           => $data,
+                'http_code'      => $status_code,
             );
         } else {
             $error_msg = $data['message'] ?? $data['Message'] ?? $data['error'] ?? 'Erreur API inconnue';

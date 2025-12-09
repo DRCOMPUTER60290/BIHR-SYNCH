@@ -225,24 +225,33 @@ if ( ! defined( 'ABSPATH' ) ) {
             <table class="widefat">
                 <thead>
                     <tr>
-                        <th><?php esc_html_e( 'Ticket ID', 'bihr-woocommerce-importer' ); ?></th>
+                        <th><?php esc_html_e( 'Ticket WC', 'bihr-woocommerce-importer' ); ?></th>
+                        <th><?php esc_html_e( 'Ticket BIHR API', 'bihr-woocommerce-importer' ); ?></th>
                         <th><?php esc_html_e( 'Commande WC', 'bihr-woocommerce-importer' ); ?></th>
                         <th><?php esc_html_e( 'Client', 'bihr-woocommerce-importer' ); ?></th>
-                        <th><?php esc_html_e( 'ID Commande BIHR', 'bihr-woocommerce-importer' ); ?></th>
-                        <th><?php esc_html_e( 'Date de Sync', 'bihr-woocommerce-importer' ); ?></th>
+                        <th><?php esc_html_e( 'ID BIHR', 'bihr-woocommerce-importer' ); ?></th>
+                        <th><?php esc_html_e( 'Date Sync', 'bihr-woocommerce-importer' ); ?></th>
                         <th><?php esc_html_e( 'Statut', 'bihr-woocommerce-importer' ); ?></th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ( $recent_orders as $post ) :
-                        $order         = wc_get_order( $post->ID );
-                        $ticket_id     = get_post_meta( $post->ID, '_bihr_sync_ticket_id', true );
-                        $bihr_order_id = get_post_meta( $post->ID, '_bihr_order_id', true );
-                        $sync_date     = get_post_meta( $post->ID, '_bihr_sync_date', true );
-                        $sync_failed   = get_post_meta( $post->ID, '_bihr_order_sync_failed', true );
+                        $order            = wc_get_order( $post->ID );
+                        $ticket_id        = get_post_meta( $post->ID, '_bihr_sync_ticket_id', true );
+                        $bihr_ticket_id   = get_post_meta( $post->ID, '_bihr_api_ticket_id', true );
+                        $bihr_order_id    = get_post_meta( $post->ID, '_bihr_order_id', true );
+                        $sync_date        = get_post_meta( $post->ID, '_bihr_sync_date', true );
+                        $sync_failed      = get_post_meta( $post->ID, '_bihr_order_sync_failed', true );
                     ?>
                         <tr>
-                            <td><code><?php echo esc_html( $ticket_id ?: 'N/A' ); ?></code></td>
+                            <td><code style="font-size: 11px;"><?php echo esc_html( $ticket_id ?: 'N/A' ); ?></code></td>
+                            <td>
+                                <?php if ( $bihr_ticket_id ) : ?>
+                                    <code style="font-size: 11px; color: #2271b1;"><?php echo esc_html( $bihr_ticket_id ); ?></code>
+                                <?php else : ?>
+                                    <span style="color: #999;">N/A</span>
+                                <?php endif; ?>
+                            </td>
                             <td>
                                 <a href="<?php echo esc_url( $order->get_edit_order_url() ); ?>">
                                     #<?php echo esc_html( $order->get_order_number() ); ?>
