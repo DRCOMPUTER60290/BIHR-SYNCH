@@ -8,15 +8,32 @@ if ( ! defined( 'ABSPATH' ) ) {
     <h1>Authentification Bihr</h1>
 
     <?php if ( isset( $_GET['bihrwi_auth_success'] ) ) : ?>
-        <div class="notice notice-success"><p>Authentification réussie. Le token a été récupéré.</p></div>
+        <div class="notice notice-success"><p>✓ Authentification Bihr réussie. Le token a été récupéré.</p></div>
     <?php endif; ?>
 
     <?php if ( isset( $_GET['bihrwi_auth_error'] ) ) : ?>
         <div class="notice notice-error">
-            <p>Échec de l'authentification.</p>
+            <p><strong>✗ Échec de l'authentification Bihr.</strong></p>
             <?php if ( ! empty( $_GET['bihrwi_msg'] ) ) : ?>
-                <p><strong>Détail :</strong> <?php echo esc_html( $_GET['bihrwi_msg'] ); ?></p>
+                <p><strong>Détail :</strong> <?php echo esc_html( wp_unslash( $_GET['bihrwi_msg'] ) ); ?></p>
             <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ( isset( $_GET['bihrwi_openai_success'] ) ) : ?>
+        <div class="notice notice-success">
+            <p><strong>✓ Clé OpenAI valide et opérationnelle !</strong></p>
+            <p>L'enrichissement automatique des descriptions par IA est activé.</p>
+        </div>
+    <?php endif; ?>
+
+    <?php if ( isset( $_GET['bihrwi_openai_error'] ) ) : ?>
+        <div class="notice notice-warning">
+            <p><strong>⚠ Problème avec la clé OpenAI</strong></p>
+            <?php if ( ! empty( $_GET['bihrwi_openai_msg'] ) ) : ?>
+                <p><strong>Détail :</strong> <?php echo esc_html( wp_unslash( $_GET['bihrwi_openai_msg'] ) ); ?></p>
+            <?php endif; ?>
+            <p><em>L'import des produits fonctionnera sans enrichissement IA.</em></p>
         </div>
     <?php endif; ?>
 

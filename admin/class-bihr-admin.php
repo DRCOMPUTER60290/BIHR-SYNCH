@@ -261,6 +261,7 @@ class BihrWI_Admin {
 
         $redirect_url = add_query_arg( array( 'page' => 'bihrwi_auth' ), admin_url( 'admin.php' ) );
 
+        // Test de l'authentification Bihr
         try {
             $token = $this->api_client->get_token();
             $this->logger->log( 'Auth: succès pour ' . $username );
@@ -276,8 +277,62 @@ class BihrWI_Admin {
             );
         }
 
+        // Test de la clé OpenAI si renseignée
+        if ( ! empty( $openai_key ) ) {
+            $ai_enrichment = new BihrWI_AI_Enrichment( $this->logger );
+            $test_result = $this->test_openai_key( $openai_key );
+            
+            if ( $test_result === true ) {
+                $this->logger->log( 'OpenAI: clé API valide et opérationnelle' );
+                $redirect_url = add_query_arg( array( 'bihrwi_openai_success' => 1 ), $redirect_url );
+            } else {
+                $this->logger->log( 'OpenAI: erreur de validation - ' . $test_result );
+                $redirect_url = add_query_arg(
+                    array(
+                        'bihrwi_openai_error' => 1,
+                        'bihrwi_openai_msg'   => urlencode( $test_result ),
+                    ),
+                    $redirect_url
+                );
+            }
+        }
+
         wp_safe_redirect( $redirect_url );
         exit;
+    }
+
+    /**
+     * Test la validité de la clé OpenAI
+     * @return bool|string true si valide, message d'erreur sinon
+     */
+    protected function test_openai_key( $api_key ) {
+        $endpoint = 'https://api.openai.com/v1/models';
+
+        $args = array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+            ),
+            'timeout' => 10,
+        );
+
+        $response = wp_remote_get( $endpoint, $args );
+
+        if ( is_wp_error( $response ) ) {
+            return 'Erreur de connexion : ' . $response->get_error_message();
+        }
+
+        $status_code = wp_remote_retrieve_response_code( $response );
+
+        if ( $status_code === 200 ) {
+            return true;
+        } elseif ( $status_code === 401 ) {
+            return 'Clé API invalide ou expirée';
+        } elseif ( $status_code === 429 ) {
+            return 'Quota dépassé sur votre compte OpenAI';
+        } else {
+            $body = wp_remote_retrieve_body( $response );
+            return 'Erreur HTTP ' . $status_code . ' : ' . substr( $body, 0, 100 );
+        }
     }
 
     public function handle_clear_logs() {
