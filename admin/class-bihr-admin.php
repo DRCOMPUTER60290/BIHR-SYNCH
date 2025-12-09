@@ -203,6 +203,15 @@ class BihrWI_Admin {
             'bihrwi_products',
             array( $this, 'render_products_page' )
         );
+
+        add_submenu_page(
+            'bihrwi_auth',
+            __( 'Paramètres Commandes', 'bihr-woocommerce-importer' ),
+            __( 'Commandes', 'bihr-woocommerce-importer' ),
+            'manage_woocommerce',
+            'bihrwi_orders',
+            array( $this, 'render_orders_settings_page' )
+        );
     }
 
     // === RENDER PAGES ===
@@ -241,6 +250,28 @@ class BihrWI_Admin {
         $available_categories = $this->product_sync->get_distinct_categories();
 
         include BIHRWI_PLUGIN_DIR . 'admin/views/products-page.php';
+    }
+
+    public function render_orders_settings_page() {
+        // Gestion de la sauvegarde des paramètres
+        if ( isset( $_POST['bihrwi_save_order_settings'] ) ) {
+            check_admin_referer( 'bihrwi_order_settings_action', 'bihrwi_order_settings_nonce' );
+            
+            update_option( 'bihrwi_auto_sync_orders', isset( $_POST['bihrwi_auto_sync_orders'] ) ? 1 : 0 );
+            update_option( 'bihrwi_auto_checkout', isset( $_POST['bihrwi_auto_checkout'] ) ? 1 : 0 );
+            update_option( 'bihrwi_weekly_free_shipping', isset( $_POST['bihrwi_weekly_free_shipping'] ) ? 1 : 0 );
+            update_option( 'bihrwi_delivery_mode', sanitize_text_field( $_POST['bihrwi_delivery_mode'] ?? 'Default' ) );
+            
+            $success_message = 'Paramètres de commandes sauvegardés avec succès.';
+        }
+
+        // Récupération des options
+        $auto_sync_orders      = get_option( 'bihrwi_auto_sync_orders', 1 );
+        $auto_checkout         = get_option( 'bihrwi_auto_checkout', 1 );
+        $weekly_free_shipping  = get_option( 'bihrwi_weekly_free_shipping', 1 );
+        $delivery_mode         = get_option( 'bihrwi_delivery_mode', 'Default' );
+
+        include BIHRWI_PLUGIN_DIR . 'admin/views/orders-settings-page.php';
     }
 
     // === HANDLERS FORM ===

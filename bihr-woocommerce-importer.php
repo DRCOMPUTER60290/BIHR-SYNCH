@@ -24,6 +24,7 @@ require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-logger.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-api-client.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-ai-enrichment.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-product-sync.php';
+require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-order-sync.php';
 require_once BIHRWI_PLUGIN_DIR . 'admin/class-bihr-admin.php';
 
 // Activation : création table + dossier logs
@@ -177,9 +178,16 @@ function bihrwi_check_prices_catalog() {
     }
 }
 
-// Initialisation de l’admin
+// Initialisation de l'admin
 add_action( 'plugins_loaded', function() {
     if ( is_admin() ) {
         new BihrWI_Admin();
+    }
+    
+    // Initialisation de la synchronisation automatique des commandes
+    if ( class_exists( 'WooCommerce' ) ) {
+        $logger     = new BihrWI_Logger();
+        $api_client = new BihrWI_API_Client( $logger );
+        new BihrWI_Order_Sync( $logger, $api_client );
     }
 } );

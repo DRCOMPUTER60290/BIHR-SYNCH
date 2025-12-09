@@ -28,6 +28,7 @@ Plugin WordPress pour la synchronisation automatique des produits BIHR avec WooC
 - 🖼️ **Gestion automatique des images**
 - 📈 **Gestion des stocks** en temps réel
 - 🔐 **Authentification OAuth** sécurisée
+- 📦 **Synchronisation automatique des commandes** vers l'API BIHR
 
 ## ✨ Fonctionnalités
 
@@ -282,6 +283,96 @@ Cette logique garantit que les noms les plus descriptifs sont utilisés.
 - 📖 Consulter l'historique
 - 🗑️ Vider les logs
 
+#### Page Commandes
+- ⚙️ Configurer la synchronisation automatique
+- 🔄 Activer/désactiver l'envoi vers BIHR
+- 📦 Paramétrer la validation et livraison
+- 📊 Voir les dernières commandes synchronisées
+
+### 13. Synchronisation automatique des commandes
+
+**Page:** `Menu WooCommerce > BIHR Synch > Commandes`
+
+#### Fonctionnement automatique
+
+Lorsqu'un client passe une commande sur votre boutique WooCommerce :
+
+1. 🛒 **Détection** : Le plugin détecte la création de la commande
+2. 🔍 **Vérification** : Vérifie que la commande contient des produits BIHR
+3. 📤 **Envoi** : Transmet automatiquement la commande à l'API BIHR
+4. 📝 **Confirmation** : Ajoute une note avec l'ID de commande BIHR
+5. 📊 **Logs** : Enregistre tous les détails de la synchronisation
+
+#### Configuration disponible
+
+| Option | Description | Défaut |
+|--------|-------------|--------|
+| **Synchronisation auto** | Active/désactive l'envoi automatique | ✅ Activé |
+| **Validation automatique** | Les commandes sont validées sans intervention | ✅ Activé |
+| **Livraison gratuite hebdomadaire** | Bénéficier de la livraison gratuite BIHR | ✅ Activé |
+| **Mode de livraison** | Default, Express ou Standard | Default |
+
+#### Format de commande BIHR
+
+```json
+{
+  "Order": {
+    "CustomerReference": "WC Order #123 - John Doe",
+    "Lines": [
+      {
+        "ProductId": "TPCI07495",
+        "Quantity": 2,
+        "ReferenceType": "Not used anymore",
+        "CustomerReference": "Nom du produit",
+        "ReservedQuantity": 0
+      }
+    ],
+    "IsAutomaticCheckoutActivated": true,
+    "IsWeeklyFreeShippingActivated": true,
+    "DeliveryMode": "Default"
+  },
+  "DropShippingAddress": {
+    "FirstName": "John",
+    "LastName": "Doe",
+    "Line1": "123 rue Example",
+    "Line2": "Appartement 4B",
+    "ZipCode": "75001",
+    "Town": "Paris",
+    "Country": "FR",
+    "Phone": "+33123456789"
+  }
+}
+```
+
+#### Métadonnées de commande
+
+Le plugin stocke les informations suivantes sur chaque commande WooCommerce :
+
+| Meta Key | Description |
+|----------|-------------|
+| `_bihr_order_synced` | Commande synchronisée avec succès |
+| `_bihr_order_id` | ID de la commande côté BIHR |
+| `_bihr_sync_date` | Date et heure de synchronisation |
+| `_bihr_order_sync_failed` | Échec de synchronisation |
+| `_bihr_sync_error` | Message d'erreur détaillé |
+
+#### Avantages
+
+- ✅ **Automatisation complète** : Pas d'intervention manuelle
+- ✅ **Traçabilité** : Notes ajoutées à chaque commande
+- ✅ **Sécurité** : Vérification des produits BIHR uniquement
+- ✅ **Formatage intelligent** : Numéros de téléphone internationaux
+- ✅ **Adresses flexibles** : Livraison ou facturation
+- ✅ **Logs détaillés** : Historique complet des synchronisations
+
+#### Gestion des erreurs
+
+En cas d'échec :
+- ❌ La commande est marquée avec `_bihr_order_sync_failed`
+- 📝 Le message d'erreur est stocké
+- 📋 Une note est ajoutée à la commande
+- 📊 L'erreur est loguée pour analyse
+
 ## 🚀 Installation
 
 ### Prérequis
@@ -442,12 +533,14 @@ bihr-woocommerce-importer/
 │   └── views/
 │       ├── auth-page.php            # Page authentification
 │       ├── logs-page.php            # Page logs
+│       ├── orders-settings-page.php # Page paramètres commandes
 │       └── products-page.php        # Page produits (filtres + import)
 │
 └── includes/                         # Classes métier
     ├── class-bihr-ai-enrichment.php # Enrichissement OpenAI
     ├── class-bihr-api-client.php    # Client API BIHR (OAuth)
     ├── class-bihr-logger.php        # Système de logs
+    ├── class-bihr-order-sync.php    # Synchronisation des commandes
     └── class-bihr-product-sync.php  # Synchronisation et import
 ```
 
@@ -459,6 +552,7 @@ bihr-woocommerce-importer/
 | `BihrWI_AI_Enrichment` | Intégration OpenAI GPT-4 |
 | `BihrWI_API_Client` | Authentification OAuth, téléchargement catalogues |
 | `BihrWI_Logger` | Enregistrement des logs |
+| `BihrWI_Order_Sync` | Synchronisation automatique des commandes |
 | `BihrWI_Product_Sync` | Parsing CSV, fusion, import WooCommerce |
 
 ## 🔌 API et catalogues
@@ -470,6 +564,7 @@ bihr-woocommerce-importer/
 - **OAuth Token** : `https://api.mybihr.com/token`
 - **Catalogues** : `https://api.mybihr.com/api/catalog/{type}`
 - **Images** : `https://api.mybihr.com/{image_path}`
+- **Création commande** : `https://api.mybihr.com/api/v2.1/Order/Creation`
 
 #### Types de catalogues
 
@@ -617,6 +712,18 @@ do_action('bihrwi_download_catalogs');
 do_action('bihrwi_merge_catalogs');
 ```
 
+### Comment désactiver la synchronisation automatique des commandes ?
+
+Rendez-vous dans `WooCommerce > BIHR Synch > Commandes` et décochez "Synchronisation automatique". Les commandes ne seront plus envoyées à BIHR automatiquement.
+
+### Que se passe-t-il si une commande contient des produits non-BIHR ?
+
+Seuls les produits avec un code BIHR (meta `_bihr_product_code`) sont envoyés. Si aucun produit BIHR n'est trouvé, la commande n'est pas synchronisée.
+
+### Comment retrouver l'ID de commande BIHR ?
+
+L'ID est stocké dans les notes de commande WooCommerce et dans le meta `_bihr_order_id`. Il est également visible dans la page "Commandes" du plugin.
+
 ## 🛠️ Support
 
 ### Logs et débogage
@@ -673,6 +780,9 @@ Développé pour la synchronisation automatique des produits BIHR avec WooCommer
 - ✅ Mapping des catégories
 - ✅ Système de logs complet
 - ✅ Interface responsive et intuitive
+- ✅ **Synchronisation automatique des commandes vers l'API BIHR**
+- ✅ **Page de configuration des paramètres de commandes**
+- ✅ **Formatage intelligent des adresses et téléphones**
 
 **Optimisations:**
 - Priorité `longdescription1` pour les noms
@@ -680,6 +790,7 @@ Développé pour la synchronisation automatique des produits BIHR avec WooCommer
 - Import séquentiel avec délai anti-surcharge
 - Détection automatique du séparateur CSV
 - Normalisation des headers CSV
+- Vérification des produits BIHR avant synchronisation
 
 ---
 
