@@ -355,7 +355,7 @@ class BihrWI_Order_Sync {
      */
     protected function send_order_to_bihr( $order_data, $ticket_id = '' ) {
         $this->logger->log( "[{$ticket_id}]    📤 Préparation de la requête HTTP POST..." );
-        $this->logger->log( "[{$ticket_id}]    🔗 URL: https://api.mybihr.com/api/v2.1/Order/Creation" );
+        $this->logger->log( "[{$ticket_id}]    🔗 URL: https://api.bihr.net/api/v2.1/Order/Creation" );
         
         // Log du JSON (formaté pour lisibilité)
         $json_data = wp_json_encode( $order_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
