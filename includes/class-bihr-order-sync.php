@@ -380,15 +380,18 @@ class BihrWI_Order_Sync {
         }
 
         // Appel à l'API
+        $api_url = 'https://api.bihr.net/api/v2.1/Order/Creation';
         $start_time = microtime( true );
         $this->logger->log( "[{$ticket_id}]    ⏱️ Envoi de la requête HTTP... (timeout: 30s)" );
+        $this->logger->log( "[{$ticket_id}]    🔗 URL: {$api_url}" );
         
         $response = wp_remote_post(
-            'https://api.mybihr.com/api/v2.1/Order/Creation',
+            $api_url,
             array(
                 'headers' => array(
                     'Authorization' => 'Bearer ' . $token,
                     'Content-Type'  => 'application/json',
+                    'Accept'        => 'application/json',
                 ),
                 'body'    => wp_json_encode( $order_data ),
                 'timeout' => 30,
@@ -409,10 +412,40 @@ class BihrWI_Order_Sync {
 
         $status_code = wp_remote_retrieve_response_code( $response );
         $body        = wp_remote_retrieve_body( $response );
-        $data        = json_decode( $body, true );
 
         $this->logger->log( "[{$ticket_id}]    📨 Réponse reçue ({$elapsed}ms) - HTTP {$status_code}" );
-        $this->logger->log( "[{$ticket_id}]    📄 Body: " . $body );
+        
+        // Si le body est trop long (ex: page HTML d'erreur), on le tronque dans les logs
+        if ( strlen( $body ) > 500 ) {
+            $this->logger->log( "[{$ticket_id}]    📄 Body (tronqué): " . substr( $body, 0, 500 ) . '...' );
+        } else {
+            $this->logger->log( "[{$ticket_id}]    📄 Body: " . $body );
+        }
+        
+        // Tentative de décodage JSON
+        $data = json_decode( $body, true );
+        
+        // Si ce n'est pas du JSON valide et que c'est une erreur HTTP
+        if ( json_last_error() !== JSON_ERROR_NONE && $status_code >= 400 ) {
+            $json_error = json_last_error_msg();
+            $this->logger->log( "[{$ticket_id}]    ⚠️ La réponse n'est pas du JSON valide: {$json_error}" );
+            
+            // Vérifier si c'est une page HTML d'erreur
+            if ( strpos( $body, '<html' ) !== false || strpos( $body, '<!DOCTYPE' ) !== false ) {
+                $this->logger->log( "[{$ticket_id}]    ❌ L'API a retourné une page HTML au lieu de JSON" );
+                return array(
+                    'success'   => false,
+                    'message'   => "L'API BIHR a retourné une erreur HTTP {$status_code} (page HTML)",
+                    'http_code' => $status_code,
+                );
+            }
+            
+            return array(
+                'success'   => false,
+                'message'   => "Réponse invalide de l'API BIHR (HTTP {$status_code})",
+                'http_code' => $status_code,
+            );
+        }
 
         if ( $status_code >= 200 && $status_code < 300 ) {
             // Récupération de l'ID de commande BIHR
