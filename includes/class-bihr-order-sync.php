@@ -366,18 +366,18 @@ class BihrWI_Order_Sync {
 
         // Récupération du token d'accès
         $this->logger->log( "[{$ticket_id}]    🔑 Récupération du token d'accès OAuth..." );
-        $token = $this->api_client->get_access_token();
-
-        if ( ! $token ) {
-            $this->logger->log( "[{$ticket_id}]    ❌ Échec: Token d'accès BIHR manquant ou expiré" );
+        
+        try {
+            $token = $this->api_client->get_token();
+            $this->logger->log( "[{$ticket_id}]    ✅ Token OAuth récupéré: " . substr( $token, 0, 20 ) . "..." );
+        } catch ( Exception $e ) {
+            $this->logger->log( "[{$ticket_id}]    ❌ Échec: " . $e->getMessage() );
             return array(
                 'success'   => false,
-                'message'   => 'Token d\'accès BIHR manquant ou expiré',
+                'message'   => 'Erreur d\'authentification: ' . $e->getMessage(),
                 'http_code' => 'N/A',
             );
         }
-        
-        $this->logger->log( "[{$ticket_id}]    ✅ Token OAuth récupéré: " . substr( $token, 0, 20 ) . "..." );
 
         // Appel à l'API
         $start_time = microtime( true );
