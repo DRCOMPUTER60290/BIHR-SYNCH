@@ -1,5 +1,8 @@
 jQuery(document).ready(function($) {
     
+    console.log('BIHR JS - Script chargé avec succès');
+    console.log('BIHR JS - jQuery version:', $.fn.jquery);
+    
     // ============================================
     // GESTION DE LA SÉLECTION MULTIPLE DE PRODUITS
     // ============================================

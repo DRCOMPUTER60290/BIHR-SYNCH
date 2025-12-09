@@ -3,7 +3,7 @@
  * Plugin Name: Bihr WooCommerce Importer
  * Description: Import des catalogues Bihr (Prices, Images, Attributes, Stocks) et création de produits WooCommerce.
  * Author: Benjamin / DrComputer60290
- * Version: 1.0.0
+ * Version: 1.0.1
  * Text Domain: bihr-woocommerce-importer
  */
 
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Constantes
-define( 'BIHRWI_VERSION', '1.0.0' );
+define( 'BIHRWI_VERSION', '1.0.1' );
 define( 'BIHRWI_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BIHRWI_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'BIHRWI_LOG_FILE', WP_CONTENT_DIR . '/uploads/bihr-import/bihr-import.log' );
