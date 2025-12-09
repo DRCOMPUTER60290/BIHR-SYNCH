@@ -171,6 +171,10 @@ if ( ! defined( 'ABSPATH' ) ) {
             </thead>
             <tbody>
                 <tr>
+                    <td><code>_bihr_sync_ticket_id</code></td>
+                    <td><?php esc_html_e( 'Ticket ID unique pour tracer toutes les étapes', 'bihr-woocommerce-importer' ); ?></td>
+                </tr>
+                <tr>
                     <td><code>_bihr_order_synced</code></td>
                     <td><?php esc_html_e( 'Indique si la commande a été synchronisée avec succès', 'bihr-woocommerce-importer' ); ?></td>
                 </tr>
@@ -221,6 +225,7 @@ if ( ! defined( 'ABSPATH' ) ) {
             <table class="widefat">
                 <thead>
                     <tr>
+                        <th><?php esc_html_e( 'Ticket ID', 'bihr-woocommerce-importer' ); ?></th>
                         <th><?php esc_html_e( 'Commande WC', 'bihr-woocommerce-importer' ); ?></th>
                         <th><?php esc_html_e( 'Client', 'bihr-woocommerce-importer' ); ?></th>
                         <th><?php esc_html_e( 'ID Commande BIHR', 'bihr-woocommerce-importer' ); ?></th>
@@ -231,11 +236,13 @@ if ( ! defined( 'ABSPATH' ) ) {
                 <tbody>
                     <?php foreach ( $recent_orders as $post ) :
                         $order         = wc_get_order( $post->ID );
+                        $ticket_id     = get_post_meta( $post->ID, '_bihr_sync_ticket_id', true );
                         $bihr_order_id = get_post_meta( $post->ID, '_bihr_order_id', true );
                         $sync_date     = get_post_meta( $post->ID, '_bihr_sync_date', true );
                         $sync_failed   = get_post_meta( $post->ID, '_bihr_order_sync_failed', true );
                     ?>
                         <tr>
+                            <td><code><?php echo esc_html( $ticket_id ?: 'N/A' ); ?></code></td>
                             <td>
                                 <a href="<?php echo esc_url( $order->get_edit_order_url() ); ?>">
                                     #<?php echo esc_html( $order->get_order_number() ); ?>

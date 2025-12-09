@@ -30,49 +30,97 @@ class BihrWI_Order_Sync {
      * @param WC_Order $order Objet commande WooCommerce
      */
     public function sync_order_to_bihr( $order_id, $posted_data, $order ) {
+        // Génération d'un Ticket ID unique pour tracer toutes les étapes
+        $ticket_id = 'WC' . $order_id . '-' . time() . '-' . substr( md5( uniqid( '', true ) ), 0, 8 );
+        
+        $this->logger->log( "┌─────────────────────────────────────────────────────────────" );
+        $this->logger->log( "│ 🎫 TICKET: {$ticket_id}" );
+        $this->logger->log( "│ 📦 COMMANDE WC: #{$order_id}" );
+        $this->logger->log( "│ 👤 CLIENT: {$order->get_billing_first_name()} {$order->get_billing_last_name()}" );
+        $this->logger->log( "│ 💶 MONTANT: {$order->get_total()} {$order->get_currency()}" );
+        $this->logger->log( "└─────────────────────────────────────────────────────────────" );
+        
+        // Stocker le ticket ID dans les métadonnées
+        update_post_meta( $order_id, '_bihr_sync_ticket_id', $ticket_id );
+        
         // Vérifier si la synchronisation automatique est activée
         if ( ! get_option( 'bihrwi_auto_sync_orders', 1 ) ) {
-            $this->logger->log( "Synchronisation automatique désactivée - Commande #{$order_id} ignorée" );
+            $this->logger->log( "[{$ticket_id}] ❌ ÉTAPE 1/6 : Synchronisation automatique désactivée - Commande ignorée" );
             return;
         }
+        
+        $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 1/6 : Synchronisation automatique activée" );
 
         try {
-            $this->logger->log( "=== SYNCHRONISATION COMMANDE #{$order_id} VERS BIHR ===" );
-
             // Vérifier si la commande n'a pas déjà été synchronisée
             if ( get_post_meta( $order_id, '_bihr_order_synced', true ) ) {
-                $this->logger->log( "Commande #{$order_id} déjà synchronisée avec BIHR" );
+                $existing_bihr_id = get_post_meta( $order_id, '_bihr_order_id', true );
+                $this->logger->log( "[{$ticket_id}] ⚠️ ÉTAPE 2/6 : Commande déjà synchronisée (BIHR ID: {$existing_bihr_id})" );
                 return;
             }
+            
+            $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 2/6 : Vérification doublons OK - Nouvelle synchronisation" );
 
             // Construire les données de la commande
-            $order_data = $this->build_order_data( $order );
+            $this->logger->log( "[{$ticket_id}] 🔄 ÉTAPE 3/6 : Construction des données de commande..." );
+            $order_data = $this->build_order_data( $order, $ticket_id );
 
             if ( ! $order_data ) {
-                $this->logger->log( "Impossible de construire les données pour la commande #{$order_id}" );
+                $this->logger->log( "[{$ticket_id}] ❌ ÉTAPE 3/6 : Impossible de construire les données (aucun produit BIHR trouvé)" );
+                update_post_meta( $order_id, '_bihr_order_sync_failed', true );
+                update_post_meta( $order_id, '_bihr_sync_error', 'Aucun produit BIHR dans la commande' );
                 return;
             }
+            
+            $product_count = count( $order_data['Order']['Lines'] );
+            $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 3/6 : Données construites - {$product_count} produit(s) BIHR trouvé(s)" );
+
+            // Log des produits
+            foreach ( $order_data['Order']['Lines'] as $index => $line ) {
+                $this->logger->log( "[{$ticket_id}]    → Produit " . ($index + 1) . ": {$line['ProductId']} x{$line['Quantity']} - {$line['CustomerReference']}" );
+            }
+            
+            // Log de l'adresse
+            $address = $order_data['DropShippingAddress'];
+            $this->logger->log( "[{$ticket_id}]    → Livraison: {$address['FirstName']} {$address['LastName']}, {$address['Line1']}, {$address['ZipCode']} {$address['Town']}, {$address['Country']}" );
 
             // Envoyer la commande à l'API BIHR
-            $result = $this->send_order_to_bihr( $order_data );
+            $this->logger->log( "[{$ticket_id}] 🚀 ÉTAPE 4/6 : Envoi vers l'API BIHR..." );
+            $result = $this->send_order_to_bihr( $order_data, $ticket_id );
 
             if ( $result && isset( $result['success'] ) && $result['success'] ) {
+                $bihr_order_id = $result['order_id'] ?? 'N/A';
+                
+                $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 4/6 : API BIHR - Réponse positive (BIHR ID: {$bihr_order_id})" );
+                $this->logger->log( "[{$ticket_id}] 💾 ÉTAPE 5/6 : Enregistrement des métadonnées WooCommerce..." );
+                
                 // Marquer la commande comme synchronisée
                 update_post_meta( $order_id, '_bihr_order_synced', true );
-                update_post_meta( $order_id, '_bihr_order_id', $result['order_id'] ?? '' );
+                update_post_meta( $order_id, '_bihr_order_id', $bihr_order_id );
                 update_post_meta( $order_id, '_bihr_sync_date', current_time( 'mysql' ) );
 
                 // Ajouter une note à la commande
                 $order->add_order_note( 
                     sprintf( 
-                        __( 'Commande synchronisée avec BIHR (ID BIHR: %s)', 'bihr-woocommerce-importer' ),
-                        $result['order_id'] ?? 'N/A'
+                        __( '✅ Commande synchronisée avec BIHR%sTicket: %s%sID BIHR: %s', 'bihr-woocommerce-importer' ),
+                        "\n",
+                        $ticket_id,
+                        "\n",
+                        $bihr_order_id
                     )
                 );
-
-                $this->logger->log( "Commande #{$order_id} synchronisée avec succès vers BIHR" );
+                
+                $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 5/6 : Métadonnées enregistrées" );
+                $this->logger->log( "[{$ticket_id}] 📝 ÉTAPE 6/6 : Note ajoutée à la commande WC" );
+                $this->logger->log( "[{$ticket_id}] 🎉 SYNCHRONISATION RÉUSSIE - Commande #{$order_id} → BIHR ID: {$bihr_order_id}" );
+                $this->logger->log( "─────────────────────────────────────────────────────────────" );
+                
             } else {
                 $error_message = $result['message'] ?? 'Erreur inconnue';
+                $http_code = $result['http_code'] ?? 'N/A';
+                
+                $this->logger->log( "[{$ticket_id}] ❌ ÉTAPE 4/6 : API BIHR - Échec (HTTP {$http_code})" );
+                $this->logger->log( "[{$ticket_id}] ❌ Erreur: {$error_message}" );
                 
                 // Marquer comme échec
                 update_post_meta( $order_id, '_bihr_order_sync_failed', true );
@@ -81,18 +129,39 @@ class BihrWI_Order_Sync {
                 // Ajouter une note d'erreur
                 $order->add_order_note( 
                     sprintf( 
-                        __( 'Échec de la synchronisation avec BIHR : %s', 'bihr-woocommerce-importer' ),
+                        __( '❌ Échec synchronisation BIHR%sTicket: %s%sErreur: %s', 'bihr-woocommerce-importer' ),
+                        "\n",
+                        $ticket_id,
+                        "\n",
                         $error_message
                     )
                 );
 
-                $this->logger->log( "Échec synchronisation commande #{$order_id} : {$error_message}" );
+                $this->logger->log( "[{$ticket_id}] 💾 ÉTAPE 5/6 : Échec enregistré dans les métadonnées" );
+                $this->logger->log( "[{$ticket_id}] 📝 ÉTAPE 6/6 : Note d'erreur ajoutée à la commande WC" );
+                $this->logger->log( "[{$ticket_id}] ⛔ SYNCHRONISATION ÉCHOUÉE" );
+                $this->logger->log( "─────────────────────────────────────────────────────────────" );
             }
 
         } catch ( Exception $e ) {
-            $this->logger->log( "Erreur synchronisation commande #{$order_id} : " . $e->getMessage() );
+            $this->logger->log( "[{$ticket_id}] 💥 EXCEPTION CRITIQUE : " . $e->getMessage() );
+            $this->logger->log( "[{$ticket_id}] 📍 Fichier: " . $e->getFile() . " (ligne " . $e->getLine() . ")" );
+            $this->logger->log( "[{$ticket_id}] 📊 Stack trace: " . $e->getTraceAsString() );
+            
             update_post_meta( $order_id, '_bihr_order_sync_failed', true );
             update_post_meta( $order_id, '_bihr_sync_error', $e->getMessage() );
+            
+            $order->add_order_note( 
+                sprintf( 
+                    __( '💥 Exception lors de la synchronisation BIHR%sTicket: %s%sErreur: %s', 'bihr-woocommerce-importer' ),
+                    "\n",
+                    $ticket_id,
+                    "\n",
+                    $e->getMessage()
+                )
+            );
+            
+            $this->logger->log( "─────────────────────────────────────────────────────────────" );
         }
     }
 
@@ -100,11 +169,14 @@ class BihrWI_Order_Sync {
      * Construit les données de commande au format BIHR API
      * 
      * @param WC_Order $order Commande WooCommerce
+     * @param string $ticket_id Identifiant unique de suivi
      * @return array|false Données formatées ou false en cas d'erreur
      */
-    protected function build_order_data( $order ) {
+    protected function build_order_data( $order, $ticket_id = '' ) {
         // Récupération des produits de la commande
         $lines = array();
+        
+        $this->logger->log( "[{$ticket_id}]    🔍 Analyse des produits de la commande..." );
         
         foreach ( $order->get_items() as $item_id => $item ) {
             $product    = $item->get_product();
@@ -114,9 +186,11 @@ class BihrWI_Order_Sync {
             $bihr_code = get_post_meta( $product_id, '_bihr_product_code', true );
             
             if ( empty( $bihr_code ) ) {
-                $this->logger->log( "Produit #{$product_id} ({$product->get_name()}) n'a pas de code BIHR - ignoré" );
+                $this->logger->log( "[{$ticket_id}]    ⚠️ Produit WC #{$product_id} ({$product->get_name()}) - Pas de code BIHR (ignoré)" );
                 continue;
             }
+
+            $this->logger->log( "[{$ticket_id}]    ✅ Produit WC #{$product_id} - Code BIHR: {$bihr_code} x{$item->get_quantity()}" );
 
             $lines[] = array(
                 'ProductId'         => $bihr_code,
@@ -129,9 +203,11 @@ class BihrWI_Order_Sync {
 
         // Si aucun produit BIHR, ne pas envoyer la commande
         if ( empty( $lines ) ) {
-            $this->logger->log( "Aucun produit BIHR trouvé dans la commande - synchronisation annulée" );
+            $this->logger->log( "[{$ticket_id}]    ❌ Aucun produit BIHR trouvé - Synchronisation annulée" );
             return false;
         }
+
+        $this->logger->log( "[{$ticket_id}]    📊 Total: " . count( $lines ) . " produit(s) BIHR à synchroniser" );
 
         // Construction de la référence client
         $customer_reference = sprintf(
@@ -139,11 +215,15 @@ class BihrWI_Order_Sync {
             $order->get_id(),
             $order->get_billing_first_name() . ' ' . $order->get_billing_last_name()
         );
+        
+        $this->logger->log( "[{$ticket_id}]    📝 Référence client: {$customer_reference}" );
 
         // Récupération des options de configuration
         $auto_checkout      = get_option( 'bihrwi_auto_checkout', true );
         $weekly_free_ship   = get_option( 'bihrwi_weekly_free_shipping', true );
         $delivery_mode      = get_option( 'bihrwi_delivery_mode', 'Default' );
+        
+        $this->logger->log( "[{$ticket_id}]    ⚙️ Options: Checkout auto={$auto_checkout}, Livraison gratuite={$weekly_free_ship}, Mode={$delivery_mode}" );
 
         // Construction des données de commande
         $order_data = array(
@@ -157,7 +237,7 @@ class BihrWI_Order_Sync {
         );
 
         // Ajout de l'adresse de livraison (DropShipping)
-        $shipping_address = $this->build_shipping_address( $order );
+        $shipping_address = $this->build_shipping_address( $order, $ticket_id );
         if ( $shipping_address ) {
             $order_data['DropShippingAddress'] = $shipping_address;
         }
@@ -169,9 +249,10 @@ class BihrWI_Order_Sync {
      * Construit l'adresse de livraison au format BIHR
      * 
      * @param WC_Order $order Commande WooCommerce
+     * @param string $ticket_id Identifiant unique de suivi
      * @return array Adresse formatée
      */
-    protected function build_shipping_address( $order ) {
+    protected function build_shipping_address( $order, $ticket_id = '' ) {
         // Utiliser l'adresse de livraison si disponible, sinon l'adresse de facturation
         $first_name = $order->get_shipping_first_name() ?: $order->get_billing_first_name();
         $last_name  = $order->get_shipping_last_name() ?: $order->get_billing_last_name();
@@ -182,9 +263,19 @@ class BihrWI_Order_Sync {
         $country    = $order->get_shipping_country() ?: $order->get_billing_country();
         $phone      = $order->get_billing_phone();
 
+        $this->logger->log( "[{$ticket_id}]    📍 Adresse: {$first_name} {$last_name}, {$address_1}, {$postcode} {$city}, {$country}" );
+
         // Formatage du numéro de téléphone (ajouter +33 si nécessaire)
+        $original_phone = $phone;
         if ( ! empty( $phone ) && $country === 'FR' ) {
             $phone = $this->format_french_phone( $phone );
+            if ( $phone !== $original_phone ) {
+                $this->logger->log( "[{$ticket_id}]    📞 Téléphone formaté: {$original_phone} → {$phone}" );
+            } else {
+                $this->logger->log( "[{$ticket_id}]    📞 Téléphone: {$phone}" );
+            }
+        } else {
+            $this->logger->log( "[{$ticket_id}]    📞 Téléphone: {$phone}" );
         }
 
         return array(
@@ -226,22 +317,39 @@ class BihrWI_Order_Sync {
      * Envoie la commande à l'API BIHR
      * 
      * @param array $order_data Données de la commande
+     * @param string $ticket_id Identifiant unique de suivi
      * @return array Résultat de l'API
      */
-    protected function send_order_to_bihr( $order_data ) {
-        $this->logger->log( 'Envoi commande vers API BIHR : ' . wp_json_encode( $order_data, JSON_PRETTY_PRINT ) );
+    protected function send_order_to_bihr( $order_data, $ticket_id = '' ) {
+        $this->logger->log( "[{$ticket_id}]    📤 Préparation de la requête HTTP POST..." );
+        $this->logger->log( "[{$ticket_id}]    🔗 URL: https://api.mybihr.com/api/v2.1/Order/Creation" );
+        
+        // Log du JSON (formaté pour lisibilité)
+        $json_data = wp_json_encode( $order_data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+        $this->logger->log( "[{$ticket_id}]    📋 Payload JSON:" );
+        foreach ( explode( "\n", $json_data ) as $line ) {
+            $this->logger->log( "[{$ticket_id}]       " . $line );
+        }
 
         // Récupération du token d'accès
+        $this->logger->log( "[{$ticket_id}]    🔑 Récupération du token d'accès OAuth..." );
         $token = $this->api_client->get_access_token();
 
         if ( ! $token ) {
+            $this->logger->log( "[{$ticket_id}]    ❌ Échec: Token d'accès BIHR manquant ou expiré" );
             return array(
-                'success' => false,
-                'message' => 'Token d\'accès BIHR manquant ou expiré',
+                'success'   => false,
+                'message'   => 'Token d\'accès BIHR manquant ou expiré',
+                'http_code' => 'N/A',
             );
         }
+        
+        $this->logger->log( "[{$ticket_id}]    ✅ Token OAuth récupéré: " . substr( $token, 0, 20 ) . "..." );
 
         // Appel à l'API
+        $start_time = microtime( true );
+        $this->logger->log( "[{$ticket_id}]    ⏱️ Envoi de la requête HTTP... (timeout: 30s)" );
+        
         $response = wp_remote_post(
             'https://api.mybihr.com/api/v2.1/Order/Creation',
             array(
@@ -253,12 +361,16 @@ class BihrWI_Order_Sync {
                 'timeout' => 30,
             )
         );
+        
+        $elapsed = round( ( microtime( true ) - $start_time ) * 1000, 2 );
 
         if ( is_wp_error( $response ) ) {
-            $this->logger->log( 'Erreur API BIHR : ' . $response->get_error_message() );
+            $error_msg = $response->get_error_message();
+            $this->logger->log( "[{$ticket_id}]    ❌ Erreur HTTP ({$elapsed}ms): {$error_msg}" );
             return array(
-                'success' => false,
-                'message' => $response->get_error_message(),
+                'success'   => false,
+                'message'   => $error_msg,
+                'http_code' => 'ERROR',
             );
         }
 
@@ -266,19 +378,40 @@ class BihrWI_Order_Sync {
         $body        = wp_remote_retrieve_body( $response );
         $data        = json_decode( $body, true );
 
-        $this->logger->log( "Réponse API BIHR (status {$status_code}) : " . $body );
+        $this->logger->log( "[{$ticket_id}]    📨 Réponse reçue ({$elapsed}ms) - HTTP {$status_code}" );
+        $this->logger->log( "[{$ticket_id}]    📄 Body: " . $body );
 
         if ( $status_code >= 200 && $status_code < 300 ) {
+            $bihr_order_id = $data['OrderId'] ?? $data['orderId'] ?? $data['order_id'] ?? 'N/A';
+            $this->logger->log( "[{$ticket_id}]    ✅ Succès - BIHR Order ID: {$bihr_order_id}" );
+            
             return array(
-                'success'  => true,
-                'order_id' => $data['OrderId'] ?? $data['orderId'] ?? '',
-                'data'     => $data,
+                'success'   => true,
+                'order_id'  => $bihr_order_id,
+                'data'      => $data,
+                'http_code' => $status_code,
             );
         } else {
+            $error_msg = $data['message'] ?? $data['Message'] ?? $data['error'] ?? 'Erreur API inconnue';
+            $this->logger->log( "[{$ticket_id}]    ❌ Échec - Message: {$error_msg}" );
+            
+            // Log des détails supplémentaires si disponibles
+            if ( isset( $data['errors'] ) && is_array( $data['errors'] ) ) {
+                $this->logger->log( "[{$ticket_id}]    📋 Détails des erreurs:" );
+                foreach ( $data['errors'] as $field => $errors ) {
+                    if ( is_array( $errors ) ) {
+                        foreach ( $errors as $error ) {
+                            $this->logger->log( "[{$ticket_id}]       - {$field}: {$error}" );
+                        }
+                    }
+                }
+            }
+            
             return array(
-                'success' => false,
-                'message' => $data['message'] ?? $data['Message'] ?? 'Erreur API inconnue',
-                'data'    => $data,
+                'success'   => false,
+                'message'   => $error_msg,
+                'data'      => $data,
+                'http_code' => $status_code,
             );
         }
     }
@@ -292,15 +425,20 @@ class BihrWI_Order_Sync {
      * @param WC_Order $order Objet commande
      */
     public function handle_order_status_change( $order_id, $old_status, $new_status, $order ) {
+        $ticket_id = get_post_meta( $order_id, '_bihr_sync_ticket_id', true ) ?: 'RETRY-' . $order_id . '-' . time();
+        
         // Si la commande passe en "traitement" et n'est pas encore synchronisée
         if ( $new_status === 'processing' && ! get_post_meta( $order_id, '_bihr_order_synced', true ) ) {
-            $this->logger->log( "Commande #{$order_id} passée en traitement - tentative de synchronisation" );
+            $this->logger->log( "[{$ticket_id}] 🔄 Changement de statut: {$old_status} → {$new_status}" );
+            $this->logger->log( "[{$ticket_id}] ⚡ Tentative de synchronisation automatique..." );
             $this->sync_order_to_bihr( $order_id, array(), $order );
         }
 
         // Si la commande passe en "annulé" et était synchronisée
         if ( $new_status === 'cancelled' && get_post_meta( $order_id, '_bihr_order_synced', true ) ) {
-            $this->logger->log( "Commande #{$order_id} annulée - notification BIHR requise (à implémenter)" );
+            $bihr_order_id = get_post_meta( $order_id, '_bihr_order_id', true );
+            $this->logger->log( "[{$ticket_id}] ⚠️ Commande WC #{$order_id} annulée (BIHR ID: {$bihr_order_id})" );
+            $this->logger->log( "[{$ticket_id}] 📌 Note: L'annulation côté BIHR doit être faite manuellement" );
             // TODO: Implémenter l'annulation côté BIHR si l'API le permet
         }
     }
@@ -317,10 +455,19 @@ class BihrWI_Order_Sync {
         if ( ! $order ) {
             return false;
         }
+        
+        $ticket_id = 'RETRY-' . $order_id . '-' . time();
+        
+        $this->logger->log( "┌─────────────────────────────────────────────────────────────" );
+        $this->logger->log( "│ 🔄 NOUVELLE TENTATIVE DE SYNCHRONISATION" );
+        $this->logger->log( "│ 🎫 TICKET: {$ticket_id}" );
+        $this->logger->log( "│ 📦 COMMANDE WC: #{$order_id}" );
+        $this->logger->log( "└─────────────────────────────────────────────────────────────" );
 
         // Réinitialiser les metas d'échec
         delete_post_meta( $order_id, '_bihr_order_sync_failed' );
         delete_post_meta( $order_id, '_bihr_sync_error' );
+        delete_post_meta( $order_id, '_bihr_order_synced' );
 
         // Réessayer la synchronisation
         $this->sync_order_to_bihr( $order_id, array(), $order );
