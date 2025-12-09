@@ -212,9 +212,66 @@ class BihrWI_Admin {
             'bihrwi_orders',
             array( $this, 'render_orders_settings_page' )
         );
+
+        add_submenu_page(
+            'bihrwi_auth',
+            __( 'Gestion des marges', 'bihr-woocommerce-importer' ),
+            __( 'Marges', 'bihr-woocommerce-importer' ),
+            'manage_woocommerce',
+            'bihrwi_margins',
+            array( $this, 'render_margins_page' )
+        );
     }
 
     // === RENDER PAGES ===
+
+    public function render_margins_page() {
+        // Traitement du formulaire de sauvegarde
+        if ( isset( $_POST['bihrwi_margins_nonce'] ) && wp_verify_nonce( $_POST['bihrwi_margins_nonce'], 'bihrwi_save_margins' ) ) {
+            $this->save_margin_settings();
+            wp_redirect( add_query_arg( 'margin_saved', '1', admin_url( 'admin.php?page=bihrwi_margins' ) ) );
+            exit;
+        }
+
+        include BIHRWI_PLUGIN_DIR . 'admin/views/margin-page.php';
+    }
+
+    private function save_margin_settings() {
+        $settings = array(
+            'default_margin_type'  => sanitize_text_field( $_POST['default_margin_type'] ?? 'percentage' ),
+            'default_margin_value' => floatval( $_POST['default_margin_value'] ?? 0 ),
+            'category_margins'     => array(),
+            'price_range_margins'  => array(),
+            'priority'             => sanitize_text_field( $_POST['priority'] ?? 'specific' ),
+        );
+
+        // Marges par catégorie
+        if ( isset( $_POST['category_margins'] ) && is_array( $_POST['category_margins'] ) ) {
+            foreach ( $_POST['category_margins'] as $key => $data ) {
+                $settings['category_margins'][ $key ] = array(
+                    'enabled' => isset( $data['enabled'] ),
+                    'type'    => sanitize_text_field( $data['type'] ?? 'percentage' ),
+                    'value'   => floatval( $data['value'] ?? 0 ),
+                );
+            }
+        }
+
+        // Marges par tranche de prix
+        if ( isset( $_POST['price_range_margins'] ) && is_array( $_POST['price_range_margins'] ) ) {
+            foreach ( $_POST['price_range_margins'] as $data ) {
+                $settings['price_range_margins'][] = array(
+                    'enabled' => isset( $data['enabled'] ),
+                    'min'     => floatval( $data['min'] ?? 0 ),
+                    'max'     => floatval( $data['max'] ?? 999999 ),
+                    'type'    => sanitize_text_field( $data['type'] ?? 'percentage' ),
+                    'value'   => floatval( $data['value'] ?? 0 ),
+                );
+            }
+        }
+
+        update_option( 'bihrwi_margin_settings', $settings );
+        $this->logger->log( 'Configuration des marges mise à jour' );
+    }
 
     public function render_auth_page() {
         $username   = get_option( 'bihrwi_username', '' );

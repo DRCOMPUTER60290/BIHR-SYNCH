@@ -243,9 +243,16 @@ class BihrWI_Product_Sync {
             $product->set_description( $base_description );
         }
 
-        // Prix HT (on le met comme prix catalogue – à adapter si tu veux une marge)
+        // Prix HT avec application de la marge
         if ( $row->dealer_price_ht !== null ) {
-            $product->set_regular_price( wc_format_decimal( $row->dealer_price_ht ) );
+            $price_with_margin = $this->calculate_price_with_margin( 
+                $row->dealer_price_ht, 
+                $row->category 
+            );
+            $product->set_regular_price( wc_format_decimal( $price_with_margin ) );
+            
+            // Stocker le prix fournisseur dans les métadonnées
+            update_post_meta( $product_id_wc, '_bihr_supplier_price', $row->dealer_price_ht );
         }
 
         // Gestion du stock
@@ -1168,6 +1175,111 @@ class BihrWI_Product_Sync {
         @unlink( $zip_file );
 
         return $count;
+    }
+
+    /**
+     * Calcule le prix de vente avec application de la marge configurée
+     *
+     * @param float $supplier_price Prix fournisseur HT
+     * @param string $category Catégorie du produit
+     * @return float Prix de vente HT avec marge appliquée
+     */
+    protected function calculate_price_with_margin( $supplier_price, $category = '' ) {
+        // Récupérer la configuration des marges
+        $margin_settings = get_option( 'bihrwi_margin_settings', array(
+            'default_margin_type' => 'percentage',
+            'default_margin_value' => 0,
+            'category_margins' => array(),
+            'price_range_margins' => array(),
+            'priority' => 'specific'
+        ) );
+
+        // Si priorité globale uniquement, appliquer la marge par défaut
+        if ( $margin_settings['priority'] === 'global' ) {
+            return $this->apply_margin( 
+                $supplier_price, 
+                $margin_settings['default_margin_type'], 
+                $margin_settings['default_margin_value'] 
+            );
+        }
+
+        // Priorité spécifique : chercher dans l'ordre Tranche de prix → Catégorie → Défaut
+
+        // 1. Vérifier les tranches de prix
+        if ( ! empty( $margin_settings['price_range_margins'] ) ) {
+            foreach ( $margin_settings['price_range_margins'] as $range ) {
+                if ( ! $range['enabled'] ) {
+                    continue;
+                }
+
+                $min = floatval( $range['min'] );
+                $max = floatval( $range['max'] );
+
+                if ( $supplier_price >= $min && $supplier_price <= $max ) {
+                    $this->logger->log( sprintf(
+                        'Marge appliquée (tranche %.2f-%.2f€): %s %s',
+                        $min, $max, $range['value'], $range['type'] === 'percentage' ? '%' : '€'
+                    ) );
+                    
+                    return $this->apply_margin( $supplier_price, $range['type'], $range['value'] );
+                }
+            }
+        }
+
+        // 2. Vérifier la marge par catégorie
+        if ( ! empty( $category ) && ! empty( $margin_settings['category_margins'] ) ) {
+            $cat_key = sanitize_key( $category );
+            
+            if ( isset( $margin_settings['category_margins'][ $cat_key ] ) ) {
+                $cat_margin = $margin_settings['category_margins'][ $cat_key ];
+                
+                if ( $cat_margin['enabled'] ) {
+                    $this->logger->log( sprintf(
+                        'Marge appliquée (catégorie %s): %s %s',
+                        $category, $cat_margin['value'], $cat_margin['type'] === 'percentage' ? '%' : '€'
+                    ) );
+                    
+                    return $this->apply_margin( $supplier_price, $cat_margin['type'], $cat_margin['value'] );
+                }
+            }
+        }
+
+        // 3. Appliquer la marge par défaut
+        if ( $margin_settings['default_margin_value'] > 0 ) {
+            $this->logger->log( sprintf(
+                'Marge appliquée (par défaut): %s %s',
+                $margin_settings['default_margin_value'], 
+                $margin_settings['default_margin_type'] === 'percentage' ? '%' : '€'
+            ) );
+        }
+
+        return $this->apply_margin( 
+            $supplier_price, 
+            $margin_settings['default_margin_type'], 
+            $margin_settings['default_margin_value'] 
+        );
+    }
+
+    /**
+     * Applique une marge sur un prix
+     *
+     * @param float $price Prix de base
+     * @param string $type Type de marge ('percentage' ou 'fixed')
+     * @param float $value Valeur de la marge
+     * @return float Prix avec marge appliquée
+     */
+    protected function apply_margin( $price, $type, $value ) {
+        if ( $value <= 0 ) {
+            return $price;
+        }
+
+        if ( $type === 'percentage' ) {
+            // Marge en pourcentage
+            return $price * ( 1 + ( $value / 100 ) );
+        } else {
+            // Marge fixe en euros
+            return $price + $value;
+        }
     }
 }
 
