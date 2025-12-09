@@ -481,11 +481,16 @@ class BihrWI_Order_Sync {
     public function handle_order_status_change( $order_id, $old_status, $new_status, $order ) {
         $ticket_id = get_post_meta( $order_id, '_bihr_sync_ticket_id', true ) ?: 'RETRY-' . $order_id . '-' . time();
         
-        // Si la commande passe en "traitement" et n'est pas encore synchronisée
-        if ( $new_status === 'processing' && ! get_post_meta( $order_id, '_bihr_order_synced', true ) ) {
-            $this->logger->log( "[{$ticket_id}] 🔄 Changement de statut: {$old_status} → {$new_status}" );
-            $this->logger->log( "[{$ticket_id}] ⚡ Tentative de synchronisation automatique..." );
+        $this->logger->log( "[{$ticket_id}] 🔄 Changement de statut détecté: {$old_status} → {$new_status}" );
+        
+        // Si la commande passe en "traitement" ou "terminée" et n'est pas encore synchronisée
+        if ( in_array( $new_status, array( 'processing', 'completed' ) ) && ! get_post_meta( $order_id, '_bihr_order_synced', true ) ) {
+            $this->logger->log( "[{$ticket_id}] ⚡ Commande non synchronisée - Lancement de la synchronisation automatique..." );
             $this->sync_order_to_bihr( $order_id, array(), $order );
+        } elseif ( in_array( $new_status, array( 'processing', 'completed' ) ) && get_post_meta( $order_id, '_bihr_order_synced', true ) ) {
+            $bihr_order_id = get_post_meta( $order_id, '_bihr_order_id', true );
+            $bihr_ticket_id = get_post_meta( $order_id, '_bihr_api_ticket_id', true );
+            $this->logger->log( "[{$ticket_id}] ✅ Commande déjà synchronisée (BIHR Order ID: {$bihr_order_id}, BIHR Ticket: {$bihr_ticket_id})" );
         }
 
         // Si la commande passe en "annulé" et était synchronisée
