@@ -352,9 +352,31 @@ Le plugin stocke les informations suivantes sur chaque commande WooCommerce :
 |----------|-------------|
 | `_bihr_order_synced` | Commande synchronisée avec succès |
 | `_bihr_order_id` | ID de la commande côté BIHR |
+| `_bihr_sync_ticket_id` | Ticket ID WooCommerce (identifiant interne) |
+| `_bihr_api_ticket_id` | Ticket ID retourné par l'API BIHR |
 | `_bihr_sync_date` | Date et heure de synchronisation |
 | `_bihr_order_sync_failed` | Échec de synchronisation |
 | `_bihr_sync_error` | Message d'erreur détaillé |
+
+#### Format de réponse BIHR
+
+L'API BIHR retourne la réponse suivante lors de la création d'une commande :
+
+```json
+{
+  "ResultCode": "Cart creation requested",
+  "TicketId": "a8287cc768dd40de8b225cc98bc30f82"
+}
+```
+
+Le plugin capture automatiquement :
+- **ResultCode** : Message de confirmation (ex: "Cart creation requested")
+- **TicketId** : Identifiant unique de la commande côté BIHR (stocké dans `_bihr_api_ticket_id`)
+
+Ces informations sont visibles dans :
+- 📝 Les métadonnées de commande WooCommerce
+- 📋 Les notes de commande
+- 📊 Les logs du plugin (page BIHR Synch > Logs)
 
 #### Avantages
 
