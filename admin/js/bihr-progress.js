@@ -9,8 +9,16 @@ jQuery(document).ready(function($) {
     // Fonction pour mettre à jour le compteur
     function updateSelectedCount() {
         var count = $('.bihr-product-checkbox:checked').length;
+        var totalCheckboxes = $('.bihr-product-checkbox').length;
+        
+        console.log('BIHR Debug - Total checkboxes:', totalCheckboxes);
+        console.log('BIHR Debug - Checked:', count);
+        console.log('BIHR Debug - Button element:', $('#bihr-import-selected').length);
+        console.log('BIHR Debug - Count element:', $('#bihr-selected-count').length);
+        
         $('#bihr-selected-count').text(count);
         $('#bihr-import-selected').prop('disabled', count === 0);
+        
         selectedProducts = [];
         $('.bihr-product-checkbox:checked').each(function() {
             selectedProducts.push({
