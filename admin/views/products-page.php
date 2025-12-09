@@ -342,9 +342,31 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
         </form>
     </div>
 
+    <!-- Barre de progression et import multiple -->
+    <div id="bihr-import-progress" style="display:none; margin: 20px 0; padding: 15px; background: #fff; border: 1px solid #ccd0d4; border-radius: 4px;">
+        <h3 style="margin-top: 0;">Import en cours...</h3>
+        <div style="background: #f0f0f1; height: 30px; border-radius: 4px; overflow: hidden; margin-bottom: 10px;">
+            <div id="bihr-progress-bar" style="background: #2271b1; height: 100%; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;"></div>
+        </div>
+        <p id="bihr-progress-text">0 / 0 produits importés</p>
+        <div id="bihr-progress-details" style="max-height: 200px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 4px; font-size: 12px;"></div>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <button id="bihr-select-all" class="button" style="margin-right: 5px;">Sélectionner tout</button>
+        <button id="bihr-deselect-all" class="button" style="margin-right: 5px;">Désélectionner tout</button>
+        <button id="bihr-import-selected" class="button button-primary" disabled>
+            <span class="dashicons dashicons-upload" style="vertical-align: middle;"></span>
+            Importer les produits sélectionnés (<span id="bihr-selected-count">0</span>)
+        </button>
+    </div>
+
     <table class="widefat fixed striped">
         <thead>
             <tr>
+                <th style="width:40px;">
+                    <input type="checkbox" id="bihr-select-all-checkbox" title="Tout sélectionner" />
+                </th>
                 <th style="width:60px;">ID</th>
                 <th style="width:120px;">Code produit</th>
                 <th>Nom</th>
@@ -360,6 +382,11 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
         <?php if ( ! empty( $products ) ) : ?>
             <?php foreach ( $products as $row ) : ?>
                 <tr>
+                    <td>
+                        <input type="checkbox" class="bihr-product-checkbox" 
+                               value="<?php echo intval( $row->id ); ?>" 
+                               data-name="<?php echo esc_attr( $row->name ?: $row->product_code ); ?>" />
+                    </td>
                     <td><?php echo intval( $row->id ); ?></td>
                     <td><?php echo esc_html( $row->product_code ); ?></td>
                     <td><?php echo esc_html( $row->name ); ?></td>

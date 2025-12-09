@@ -30,6 +30,7 @@ class BihrWI_Admin {
         // Handlers AJAX
         add_action( 'wp_ajax_bihrwi_download_all_catalogs_ajax', array( $this, 'ajax_download_all_catalogs' ) );
         add_action( 'wp_ajax_bihrwi_merge_catalogs_ajax', array( $this, 'ajax_merge_catalogs' ) );
+        add_action( 'wp_ajax_bihrwi_import_single_product', array( $this, 'ajax_import_single_product' ) );
 
     }
 	
@@ -867,6 +868,44 @@ class BihrWI_Admin {
 
 		} catch ( Exception $e ) {
 			$this->logger->log( 'AJAX: Erreur fusion - ' . $e->getMessage() );
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * Handler AJAX pour l'import d'un seul produit
+	 */
+	public function ajax_import_single_product() {
+		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission denied.' ) );
+		}
+
+		$product_id = isset( $_POST['product_id'] ) ? intval( $_POST['product_id'] ) : 0;
+
+		if ( ! $product_id ) {
+			wp_send_json_error( array( 'message' => 'ID de produit invalide.' ) );
+		}
+
+		try {
+			$this->logger->log( "AJAX: Import du produit ID {$product_id}" );
+
+			$wc_id = $this->product_sync->import_to_woocommerce( $product_id );
+
+			if ( $wc_id ) {
+				$this->logger->log( "AJAX: Produit {$product_id} importé avec succès (WC ID: {$wc_id})" );
+				wp_send_json_success( array( 
+					'wc_id' => $wc_id,
+					'message' => 'Produit importé avec succès.'
+				) );
+			} else {
+				$this->logger->log( "AJAX: Échec de l'import du produit {$product_id}" );
+				wp_send_json_error( array( 'message' => 'Échec de l\'import du produit.' ) );
+			}
+
+		} catch ( Exception $e ) {
+			$this->logger->log( "AJAX: Erreur import produit {$product_id} - " . $e->getMessage() );
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 	}

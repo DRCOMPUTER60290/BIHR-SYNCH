@@ -53,6 +53,15 @@
     }
 }
 
+@keyframes rotation {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
 .bihr-progress-bar.complete {
     background: linear-gradient(90deg, #00a32a, #008a20);
 }
