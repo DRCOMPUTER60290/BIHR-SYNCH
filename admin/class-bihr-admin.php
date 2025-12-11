@@ -133,15 +133,50 @@ class BihrWI_Admin {
 
             if ( $file_path ) {
                 // Fichier téléchargé avec succès
+                $logger->log( "Catalogue Prices téléchargé: {$file_path}" );
                 delete_option( 'bihrwi_prices_generation' );
 
-                $redirect_url = add_query_arg(
-                    array(
-                        'bihrwi_check_status' => 'done',
-                        'bihrwi_file'         => urlencode( $file_path ),
-                    ),
-                    $redirect_url
-                );
+                // Lancer automatiquement la fusion des catalogues
+                $logger->log( "Démarrage automatique de la fusion des catalogues..." );
+                
+                try {
+                    $product_sync = new BihrWI_Product_Sync( $logger );
+                    $result = $product_sync->merge_all_catalogs();
+                    
+                    if ( $result['success'] ) {
+                        $logger->log( "Fusion automatique réussie: {$result['total_products']} produits" );
+                        
+                        $redirect_url = add_query_arg(
+                            array(
+                                'bihrwi_check_status' => 'done_and_merged',
+                                'bihrwi_file'         => urlencode( $file_path ),
+                                'total_products'      => $result['total_products'],
+                            ),
+                            $redirect_url
+                        );
+                    } else {
+                        $logger->log( "Échec de la fusion automatique" );
+                        
+                        $redirect_url = add_query_arg(
+                            array(
+                                'bihrwi_check_status' => 'done_merge_failed',
+                                'bihrwi_file'         => urlencode( $file_path ),
+                            ),
+                            $redirect_url
+                        );
+                    }
+                } catch ( Exception $merge_error ) {
+                    $logger->log( "Exception lors de la fusion: " . $merge_error->getMessage() );
+                    
+                    $redirect_url = add_query_arg(
+                        array(
+                            'bihrwi_check_status' => 'done',
+                            'bihrwi_file'         => urlencode( $file_path ),
+                            'merge_error'         => urlencode( $merge_error->getMessage() ),
+                        ),
+                        $redirect_url
+                    );
+                }
             } else {
                 $redirect_url = add_query_arg(
                     array(

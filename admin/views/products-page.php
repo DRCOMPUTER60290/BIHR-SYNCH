@@ -58,9 +58,23 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
             <div class="notice notice-warning"><p>
                 Le fichier Prices est toujours en cours de génération (PROCESSING).
             </p></div>
+        <?php elseif ( $_GET['bihrwi_check_status'] === 'done_and_merged' ) : ?>
+            <div class="notice notice-success"><p>
+                <strong>✓ Succès complet !</strong><br>
+                Le catalogue Prices a été téléchargé et automatiquement fusionné avec les autres catalogues.<br>
+                <strong><?php echo isset( $_GET['total_products'] ) ? intval( $_GET['total_products'] ) : 0; ?> produits</strong> sont maintenant disponibles.
+            </p></div>
+        <?php elseif ( $_GET['bihrwi_check_status'] === 'done_merge_failed' ) : ?>
+            <div class="notice notice-warning"><p>
+                Le catalogue Prices a été téléchargé, mais la fusion automatique a échoué.<br>
+                Vous pouvez essayer de lancer la fusion manuellement ci-dessous.
+            </p></div>
         <?php elseif ( $_GET['bihrwi_check_status'] === 'done' ) : ?>
             <div class="notice notice-success"><p>
                 Le fichier Prices est prêt et a été téléchargé.
+                <?php if ( isset( $_GET['merge_error'] ) ) : ?>
+                    <br><strong>Note:</strong> La fusion automatique a rencontré une erreur : <?php echo esc_html( wp_unslash( $_GET['merge_error'] ) ); ?>
+                <?php endif; ?>
             </p></div>
         <?php elseif ( $_GET['bihrwi_check_status'] === 'error' ) : ?>
             <div class="notice notice-error"><p>
