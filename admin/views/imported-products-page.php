@@ -140,6 +140,10 @@ $total_pages = $results->max_num_pages;
             <tbody>
                 <?php foreach ( $products as $product ) : 
                     $product_code = $product->get_sku();
+                    // Si pas de SKU, chercher dans les meta données BIHR
+                    if ( empty( $product_code ) ) {
+                        $product_code = get_post_meta( $product->get_id(), '_bihr_product_code', true );
+                    }
                     $stock_quantity = $product->get_stock_quantity();
                     $stock_status = $product->get_stock_status();
                     ?>
