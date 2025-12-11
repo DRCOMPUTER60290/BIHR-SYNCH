@@ -248,14 +248,20 @@ class BihrWI_API_Client {
         try {
             $token = $this->get_token();
             
-            // Construction de l'URL avec le paramètre "code produit"
+            // Test avec différents noms de paramètres possibles
+            // En fonction de la documentation BIHR API
             $url = $this->base_url . '/Inventory/StockValue';
-            $url = add_query_arg( 'code produit', $product_code, $url );
             
-            $this->logger->log( "Appel API stock: {$url}" );
+            // Essayer d'abord avec "ProductId"
+            $url_with_param = add_query_arg( 'ProductId', $product_code, $url );
+            
+            $this->logger->log( "=== APPEL API STOCK ===" );
+            $this->logger->log( "URL: {$url_with_param}" );
+            $this->logger->log( "Code produit: {$product_code}" );
+            $this->logger->log( "Token présent: " . ( ! empty( $token ) ? 'OUI' : 'NON' ) );
             
             $response = wp_remote_get(
-                $url,
+                $url_with_param,
                 array(
                     'timeout' => 15,
                     'headers' => array(
@@ -272,19 +278,46 @@ class BihrWI_API_Client {
 
             $code = wp_remote_retrieve_response_code( $response );
             $body = wp_remote_retrieve_body( $response );
+            $headers = wp_remote_retrieve_headers( $response );
             
-            $this->logger->log( "Réponse API stock pour {$product_code} (HTTP {$code}): {$body}" );
+            $this->logger->log( "HTTP Status: {$code}" );
+            $this->logger->log( "Response Body: {$body}" );
+            $this->logger->log( "Content-Type: " . ( isset( $headers['content-type'] ) ? $headers['content-type'] : 'N/A' ) );
             
             if ( $code !== 200 ) {
-                $this->logger->log( "Stock API HTTP {$code} pour produit {$product_code}: {$body}" );
-                return false;
+                $this->logger->log( "ÉCHEC: HTTP {$code} pour produit {$product_code}" );
+                
+                // Si échec avec ProductId, essayer avec "code produit"
+                $url_alt = add_query_arg( 'code produit', $product_code, $url );
+                $this->logger->log( "Tentative alternative avec: {$url_alt}" );
+                
+                $response_alt = wp_remote_get(
+                    $url_alt,
+                    array(
+                        'timeout' => 15,
+                        'headers' => array(
+                            'Authorization' => 'Bearer ' . $token,
+                            'Accept'        => 'application/json',
+                        ),
+                    )
+                );
+                
+                if ( ! is_wp_error( $response_alt ) ) {
+                    $code = wp_remote_retrieve_response_code( $response_alt );
+                    $body = wp_remote_retrieve_body( $response_alt );
+                    $this->logger->log( "Réponse alternative - HTTP {$code}: {$body}" );
+                }
+                
+                if ( $code !== 200 ) {
+                    return false;
+                }
             }
 
             // L'API retourne directement la valeur du stock (nombre entier)
-            // Par exemple: "20" pour 20 produits restants
             $stock_level = intval( trim( $body ) );
             
-            $this->logger->log( "Stock converti pour {$product_code}: {$stock_level}" );
+            $this->logger->log( "✓ Stock récupéré: {$stock_level}" );
+            $this->logger->log( "=======================" );
             
             return array(
                 'stock_level' => $stock_level,
