@@ -361,4 +361,62 @@ jQuery(document).ready(function($) {
         });
     });
     
+    // ============================================
+    // RAFRAÎCHISSEMENT DU STOCK EN TEMPS RÉEL
+    // ============================================
+    
+    $(document).on('click', '.refresh-stock', function(e) {
+        e.preventDefault();
+        
+        var $button = $(this);
+        var $cell = $button.closest('.stock-cell');
+        var $stockValue = $cell.find('.stock-value');
+        var productCode = $button.data('product-code');
+        
+        // Désactiver le bouton et afficher un spinner
+        $button.prop('disabled', true);
+        $button.find('.dashicons').removeClass('dashicons-update').addClass('dashicons-update spin');
+        
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'bihr_refresh_stock',
+                product_code: productCode,
+                nonce: bihrProgressData.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    var stockLevel = response.data.stock_level;
+                    var stockHtml = '<strong style="color: green;">' + stockLevel + '</strong>';
+                    
+                    if (stockLevel === 0) {
+                        stockHtml = '<strong style="color: red;">0</strong>';
+                    } else if (stockLevel < 5) {
+                        stockHtml = '<strong style="color: orange;">' + stockLevel + '</strong>';
+                    }
+                    
+                    stockHtml += '<br><small style="color: #999;">En temps réel</small>';
+                    $stockValue.html(stockHtml);
+                    
+                    // Animation de succès
+                    $cell.css('background-color', '#d4edda');
+                    setTimeout(function() {
+                        $cell.css('background-color', '');
+                    }, 2000);
+                } else {
+                    alert('Erreur lors de la récupération du stock : ' + response.data.message);
+                }
+            },
+            error: function() {
+                alert('Erreur de connexion lors de la récupération du stock.');
+            },
+            complete: function() {
+                // Réactiver le bouton
+                $button.prop('disabled', false);
+                $button.find('.dashicons').removeClass('spin').addClass('dashicons-update');
+            }
+        });
+    });
+    
 });

@@ -427,17 +427,28 @@ $status_data = get_option( 'bihrwi_prices_generation', array() );
                         }
                         ?>
                     </td>
-                    <td>
-                        <?php
-                        if ( $row->stock_level !== null ) {
-                            echo intval( $row->stock_level );
-                            if ( ! empty( $row->stock_description ) ) {
-                                echo '<br /><small>' . esc_html( $row->stock_description ) . '</small>';
-                            }
-                        } else {
-                            echo '&mdash;';
-                        }
-                        ?>
+                    <td class="stock-cell" data-product-id="<?php echo intval( $row->id ); ?>" data-product-code="<?php echo esc_attr( $row->product_code ); ?>">
+                        <div class="stock-display">
+                            <span class="stock-value">
+                                <?php
+                                if ( $row->stock_level !== null ) {
+                                    echo intval( $row->stock_level );
+                                    if ( ! empty( $row->stock_description ) ) {
+                                        echo '<br /><small>' . esc_html( $row->stock_description ) . '</small>';
+                                    }
+                                } else {
+                                    echo '&mdash;';
+                                }
+                                ?>
+                            </span>
+                            <button type="button" 
+                                    class="button button-small refresh-stock" 
+                                    data-product-code="<?php echo esc_attr( $row->product_code ); ?>"
+                                    title="Rafraîchir le stock en temps réel"
+                                    style="margin-left: 5px; padding: 2px 6px;">
+                                <span class="dashicons dashicons-update" style="font-size: 14px; width: 14px; height: 14px;"></span>
+                            </button>
+                        </div>
                     </td>
                     <td>
                         <?php

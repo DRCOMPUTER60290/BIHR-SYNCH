@@ -237,4 +237,56 @@ class BihrWI_API_Client {
 
         return $filepath;
     }
+
+    /**
+     * Récupère le stock en temps réel pour un produit
+     * 
+     * @param string $product_code Code produit BIHR
+     * @return array|false Tableau avec 'stock_level' ou false si erreur
+     */
+    public function get_real_time_stock( $product_code ) {
+        try {
+            $token = $this->get_token();
+            
+            // Encoder le code produit pour l'URL
+            $encoded_code = urlencode( $product_code );
+            $url = $this->base_url . '/Inventory/StockValue?code%20produit=' . $encoded_code;
+            
+            $response = wp_remote_get(
+                $url,
+                array(
+                    'timeout' => 15,
+                    'headers' => array(
+                        'Authorization' => 'Bearer ' . $token,
+                        'Accept'        => 'application/json',
+                    ),
+                )
+            );
+
+            if ( is_wp_error( $response ) ) {
+                $this->logger->log( 'Stock API Error: ' . $response->get_error_message() );
+                return false;
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+            $body = wp_remote_retrieve_body( $response );
+            
+            if ( $code !== 200 ) {
+                $this->logger->log( "Stock API HTTP {$code} pour produit {$product_code}: {$body}" );
+                return false;
+            }
+
+            // L'API retourne directement la valeur du stock (nombre entier)
+            $stock_level = intval( $body );
+            
+            return array(
+                'stock_level' => $stock_level,
+                'product_code' => $product_code
+            );
+
+        } catch ( Exception $e ) {
+            $this->logger->log( 'Stock API Exception: ' . $e->getMessage() );
+            return false;
+        }
+    }
 }

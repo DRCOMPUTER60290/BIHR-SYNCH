@@ -31,6 +31,7 @@ class BihrWI_Admin {
         add_action( 'wp_ajax_bihrwi_download_all_catalogs_ajax', array( $this, 'ajax_download_all_catalogs' ) );
         add_action( 'wp_ajax_bihrwi_merge_catalogs_ajax', array( $this, 'ajax_merge_catalogs' ) );
         add_action( 'wp_ajax_bihrwi_import_single_product', array( $this, 'ajax_import_single_product' ) );
+        add_action( 'wp_ajax_bihr_refresh_stock', array( $this, 'ajax_refresh_stock' ) );
 
     }
 	
@@ -994,6 +995,49 @@ class BihrWI_Admin {
 
 		} catch ( Exception $e ) {
 			$this->logger->log( "AJAX: Erreur import produit {$product_id} - " . $e->getMessage() );
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * AJAX: Rafraîchir le stock en temps réel depuis l'API BIHR
+	 */
+	public function ajax_refresh_stock() {
+		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => 'Permissions insuffisantes.' ) );
+		}
+
+		$product_code = sanitize_text_field( $_POST['product_code'] ?? '' );
+
+		if ( empty( $product_code ) ) {
+			wp_send_json_error( array( 'message' => 'Code produit manquant.' ) );
+		}
+
+		try {
+			$api = new BihrWI_API_Client( $this->logger );
+			$stock_data = $api->get_real_time_stock( $product_code );
+
+			if ( $stock_data === false ) {
+				wp_send_json_error( array( 
+					'message' => 'Impossible de récupérer le stock depuis l\'API BIHR.' 
+				) );
+			}
+
+			$this->logger->log( sprintf(
+				'Stock temps réel récupéré pour %s: %d unités',
+				$product_code,
+				$stock_data['stock_level']
+			) );
+
+			wp_send_json_success( array(
+				'stock_level' => $stock_data['stock_level'],
+				'product_code' => $product_code
+			) );
+
+		} catch ( Exception $e ) {
+			$this->logger->log( 'AJAX: Erreur refresh stock - ' . $e->getMessage() );
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 	}
