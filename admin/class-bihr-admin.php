@@ -40,7 +40,7 @@ class BihrWI_Admin {
 	 */
 	public function enqueue_admin_assets( $hook ) {
 		// Charge uniquement sur les pages du plugin
-		if ( strpos( $hook, 'bihrwi' ) === false ) {
+		if ( strpos( $hook, 'bihrwi' ) === false && strpos( $hook, 'bihr' ) === false ) {
 			return;
 		}
 
@@ -64,6 +64,7 @@ class BihrWI_Admin {
 			'bihrProgressData',
 			array(
 				'nonce' => wp_create_nonce( 'bihrwi_ajax_nonce' ),
+				'ajaxurl' => admin_url( 'admin-ajax.php' ),
 			)
 		);
 	}

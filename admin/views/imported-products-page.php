@@ -271,6 +271,27 @@ $total_pages = $results->max_num_pages;
 
 <script>
 jQuery(document).ready(function($) {
+    console.log('=== BIHR Imported Products Page ===');
+    console.log('bihrProgressData:', typeof bihrProgressData !== 'undefined' ? bihrProgressData : 'NON DÉFINI');
+    console.log('ajaxurl:', typeof ajaxurl !== 'undefined' ? ajaxurl : 'NON DÉFINI');
+    
+    // Utiliser la bonne URL AJAX
+    var ajaxUrl = typeof bihrProgressData !== 'undefined' && bihrProgressData.ajaxurl 
+        ? bihrProgressData.ajaxurl 
+        : (typeof ajaxurl !== 'undefined' ? ajaxurl : '<?php echo admin_url( 'admin-ajax.php' ); ?>');
+    
+    console.log('URL AJAX utilisée:', ajaxUrl);
+    
+    var nonce = typeof bihrProgressData !== 'undefined' && bihrProgressData.nonce 
+        ? bihrProgressData.nonce 
+        : '';
+    
+    console.log('Nonce:', nonce ? 'PRÉSENT' : 'MANQUANT');
+    
+    if (!nonce) {
+        console.error('⚠️ ERREUR: Nonce manquant! Le script bihr-progress.js n\'est peut-être pas chargé.');
+    }
+    
     // Compteur de produits sélectionnés
     function updateSelectedCount() {
         var count = $('.select-product:checked').length;
@@ -363,16 +384,27 @@ jQuery(document).ready(function($) {
             $button.find('.dashicons').addClass('spin');
             $cell.css('background-color', '#f0f8ff');
             
+            console.log('Envoi requête AJAX pour produit:', product.id, product.code);
+            
             $.ajax({
-                url: ajaxurl,
+                url: ajaxUrl,
                 method: 'POST',
                 data: {
                     action: 'bihr_refresh_stock',
                     product_code: product.code,
                     product_id: product.id,
-                    nonce: bihrProgressData.nonce
+                    nonce: nonce
+                },
+                beforeSend: function() {
+                    console.log('Requête envoyée:', {
+                        action: 'bihr_refresh_stock',
+                        product_code: product.code,
+                        product_id: product.id,
+                        nonce: nonce ? 'PRÉSENT' : 'MANQUANT'
+                    });
                 },
                 success: function(response) {
+                    console.log('Réponse reçue:', response);
                     if (response.success) {
                         succeeded++;
                         var stockLevel = response.data.stock_level;
@@ -407,7 +439,9 @@ jQuery(document).ready(function($) {
                         $cell.css('background-color', '#f8d7da');
                     }
                 },
-                error: function() {
+                error: function(xhr, status, error) {
+                    console.error('Erreur AJAX:', {xhr: xhr, status: status, error: error});
+                    console.error('Response text:', xhr.responseText);
                     failed++;
                     $cell.css('background-color', '#f8d7da');
                 },
