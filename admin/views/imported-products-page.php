@@ -83,28 +83,58 @@ $total_pages = $results->max_num_pages;
         </form>
     </div>
 
-    <p>
-        <?php
-        /* translators: %d: nombre de produits */
-        printf( esc_html__( '%d produit(s) trouvé(s)', 'bihr-woocommerce-importer' ), intval( $total ) );
-        ?>
-    </p>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0;">
+        <p style="margin: 0;">
+            <?php
+            /* translators: %d: nombre de produits */
+            printf( esc_html__( '%d produit(s) trouvé(s)', 'bihr-woocommerce-importer' ), intval( $total ) );
+            ?>
+        </p>
+        
+        <?php if ( ! empty( $products ) ) : ?>
+            <div>
+                <button type="button" id="refresh-selected-stocks" class="button button-primary" disabled>
+                    <span class="dashicons dashicons-update" style="margin-top: 3px;"></span>
+                    <?php esc_html_e( 'Actualiser les stocks sélectionnés', 'bihr-woocommerce-importer' ); ?>
+                    (<span id="selected-count">0</span>)
+                </button>
+                <button type="button" id="refresh-all-stocks" class="button">
+                    <span class="dashicons dashicons-update" style="margin-top: 3px;"></span>
+                    <?php esc_html_e( 'Actualiser tous les stocks', 'bihr-woocommerce-importer' ); ?>
+                </button>
+            </div>
+        <?php endif; ?>
+    </div>
+    
+    <!-- Zone de notification -->
+    <div id="stock-refresh-notification" style="display: none; background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 12px; margin: 10px 0; border-radius: 4px;">
+        <strong id="notification-message"></strong>
+        <div id="notification-progress" style="margin-top: 8px;">
+            <div style="background: #fff; height: 20px; border-radius: 3px; overflow: hidden;">
+                <div id="progress-bar" style="background: #28a745; height: 100%; width: 0%; transition: width 0.3s;"></div>
+            </div>
+            <small id="progress-text" style="display: block; margin-top: 5px;"></small>
+        </div>
+    </div>
 
     <?php if ( empty( $products ) ) : ?>
         <div class="notice notice-info">
             <p><?php esc_html_e( 'Aucun produit trouvé.', 'bihr-woocommerce-importer' ); ?></p>
         </div>
     <?php else : ?>
-        <table class="wp-list-table widefat fixed striped">
+        <table class="wp-list-table widefat fixed striped" id="imported-products-table">
             <thead>
                 <tr>
-                    <th style="width: 60px;"><?php esc_html_e( 'Image', 'bihr-woocommerce-importer' ); ?></th>
-                    <th><?php esc_html_e( 'Nom du produit', 'bihr-woocommerce-importer' ); ?></th>
-                    <th style="width: 120px;"><?php esc_html_e( 'Code BIHR', 'bihr-woocommerce-importer' ); ?></th>
+                    <th style="width: 40px;">
+                        <input type="checkbox" id="select-all-products" title="<?php esc_attr_e( 'Tout sélectionner', 'bihr-woocommerce-importer' ); ?>">
+                    </th>
+                    <th style="width: 80px;"><?php esc_html_e( 'Image', 'bihr-woocommerce-importer' ); ?></th>
+                    <th style="width: 30%;"><?php esc_html_e( 'Nom du produit', 'bihr-woocommerce-importer' ); ?></th>
+                    <th style="width: 150px;"><?php esc_html_e( 'Code BIHR', 'bihr-woocommerce-importer' ); ?></th>
                     <th style="width: 100px;"><?php esc_html_e( 'Prix', 'bihr-woocommerce-importer' ); ?></th>
-                    <th style="width: 120px;"><?php esc_html_e( 'Stock', 'bihr-woocommerce-importer' ); ?></th>
+                    <th style="width: 150px;"><?php esc_html_e( 'Stock', 'bihr-woocommerce-importer' ); ?></th>
                     <th style="width: 100px;"><?php esc_html_e( 'Statut', 'bihr-woocommerce-importer' ); ?></th>
-                    <th style="width: 150px;"><?php esc_html_e( 'Actions', 'bihr-woocommerce-importer' ); ?></th>
+                    <th style="width: 180px;"><?php esc_html_e( 'Actions', 'bihr-woocommerce-importer' ); ?></th>
                 </tr>
             </thead>
             <tbody>
@@ -113,11 +143,14 @@ $total_pages = $results->max_num_pages;
                     $stock_quantity = $product->get_stock_quantity();
                     $stock_status = $product->get_stock_status();
                     ?>
-                    <tr>
+                    <tr data-product-id="<?php echo esc_attr( $product->get_id() ); ?>">
                         <td>
+                            <input type="checkbox" class="select-product" value="<?php echo esc_attr( $product->get_id() ); ?>" data-product-code="<?php echo esc_attr( $product_code ); ?>">
+                        </td>
+                        <td style="padding: 8px; text-align: center;">
                             <?php echo wp_kses_post( $product->get_image( 'thumbnail' ) ); ?>
                         </td>
-                        <td>
+                        <td style="padding: 8px;">
                             <strong>
                                 <a href="<?php echo esc_url( get_edit_post_link( $product->get_id() ) ); ?>">
                                     <?php echo esc_html( $product->get_name() ); ?>
@@ -125,44 +158,48 @@ $total_pages = $results->max_num_pages;
                             </strong>
                         </td>
                         <td>
-                            <code><?php echo esc_html( $product_code ); ?></code>
+                            <code style="background: #f0f0f1; padding: 3px 6px; border-radius: 3px; font-size: 12px;">
+                                <?php echo esc_html( $product_code ? $product_code : __( 'N/A', 'bihr-woocommerce-importer' ) ); ?>
+                            </code>
                         </td>
                         <td>
                             <?php echo wp_kses_post( $product->get_price_html() ); ?>
                         </td>
                         <td class="stock-cell" data-product-id="<?php echo esc_attr( $product->get_id() ); ?>" data-product-code="<?php echo esc_attr( $product_code ); ?>">
-                            <div class="stock-display" style="display: flex; align-items: center; gap: 8px;">
-                                <span class="stock-value">
-                                    <?php
-                                    if ( $stock_quantity !== null ) {
-                                        echo esc_html( $stock_quantity );
-                                    } else {
-                                        echo esc_html__( 'N/A', 'bihr-woocommerce-importer' );
-                                    }
-                                    ?>
-                                </span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div>
+                                    <div class="stock-value">
+                                        <?php
+                                        if ( $stock_quantity !== null ) {
+                                            echo '<strong>' . esc_html( $stock_quantity ) . '</strong>';
+                                        } else {
+                                            echo '<strong>' . esc_html__( 'N/A', 'bihr-woocommerce-importer' ) . '</strong>';
+                                        }
+                                        ?>
+                                    </div>
+                                    <small class="stock-status-<?php echo esc_attr( $stock_status ); ?>">
+                                        <?php
+                                        switch ( $stock_status ) {
+                                            case 'instock':
+                                                esc_html_e( 'En stock', 'bihr-woocommerce-importer' );
+                                                break;
+                                            case 'outofstock':
+                                                esc_html_e( 'Rupture', 'bihr-woocommerce-importer' );
+                                                break;
+                                            case 'onbackorder':
+                                                esc_html_e( 'Sur commande', 'bihr-woocommerce-importer' );
+                                                break;
+                                        }
+                                        ?>
+                                    </small>
+                                </div>
                                 <button type="button" 
-                                        class="refresh-stock button-link" 
+                                        class="refresh-stock button button-small" 
                                         title="<?php esc_attr_e( 'Rafraîchir le stock', 'bihr-woocommerce-importer' ); ?>"
-                                        style="padding: 2px; line-height: 1;">
-                                    <span class="dashicons dashicons-update"></span>
+                                        style="padding: 4px 8px;">
+                                    <span class="dashicons dashicons-update" style="font-size: 16px;"></span>
                                 </button>
                             </div>
-                            <small class="stock-status-<?php echo esc_attr( $stock_status ); ?>">
-                                <?php
-                                switch ( $stock_status ) {
-                                    case 'instock':
-                                        esc_html_e( 'En stock', 'bihr-woocommerce-importer' );
-                                        break;
-                                    case 'outofstock':
-                                        esc_html_e( 'Rupture', 'bihr-woocommerce-importer' );
-                                        break;
-                                    case 'onbackorder':
-                                        esc_html_e( 'Sur commande', 'bihr-woocommerce-importer' );
-                                        break;
-                                }
-                                ?>
-                            </small>
                         </td>
                         <td>
                             <?php
@@ -224,4 +261,174 @@ $total_pages = $results->max_num_pages;
 .stock-status-onbackorder {
     color: #ffb900;
 }
+#imported-products-table img {
+    max-width: 60px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
 </style>
+
+<script>
+jQuery(document).ready(function($) {
+    // Compteur de produits sélectionnés
+    function updateSelectedCount() {
+        var count = $('.select-product:checked').length;
+        $('#selected-count').text(count);
+        $('#refresh-selected-stocks').prop('disabled', count === 0);
+    }
+    
+    // Sélection individuelle
+    $('.select-product').on('change', updateSelectedCount);
+    
+    // Tout sélectionner / Tout désélectionner
+    $('#select-all-products').on('change', function() {
+        $('.select-product').prop('checked', $(this).is(':checked'));
+        updateSelectedCount();
+    });
+    
+    // Actualiser les stocks sélectionnés
+    $('#refresh-selected-stocks').on('click', function() {
+        var selectedProducts = [];
+        $('.select-product:checked').each(function() {
+            selectedProducts.push({
+                id: $(this).val(),
+                code: $(this).data('product-code')
+            });
+        });
+        
+        if (selectedProducts.length === 0) {
+            alert('Veuillez sélectionner au moins un produit.');
+            return;
+        }
+        
+        refreshMultipleStocks(selectedProducts);
+    });
+    
+    // Actualiser tous les stocks
+    $('#refresh-all-stocks').on('click', function() {
+        if (!confirm('Voulez-vous vraiment actualiser les stocks de tous les produits de cette page ?')) {
+            return;
+        }
+        
+        var allProducts = [];
+        $('.select-product').each(function() {
+            allProducts.push({
+                id: $(this).val(),
+                code: $(this).data('product-code')
+            });
+        });
+        
+        refreshMultipleStocks(allProducts);
+    });
+    
+    // Fonction pour actualiser plusieurs stocks
+    function refreshMultipleStocks(products) {
+        var $notification = $('#stock-refresh-notification');
+        var $message = $('#notification-message');
+        var $progressBar = $('#progress-bar');
+        var $progressText = $('#progress-text');
+        
+        var total = products.length;
+        var processed = 0;
+        var succeeded = 0;
+        var failed = 0;
+        
+        $message.text('Actualisation en cours...');
+        $progressText.text('0 / ' + total + ' produits traités');
+        $progressBar.css('width', '0%');
+        $notification.show();
+        
+        // Désactiver les boutons pendant le traitement
+        $('#refresh-selected-stocks, #refresh-all-stocks').prop('disabled', true);
+        
+        function processNext(index) {
+            if (index >= products.length) {
+                // Terminé
+                $notification.css('background', '#d4edda');
+                $message.text('✓ Actualisation terminée : ' + succeeded + ' réussis, ' + failed + ' échoués');
+                setTimeout(function() {
+                    $notification.fadeOut();
+                    $('#refresh-selected-stocks, #refresh-all-stocks').prop('disabled', false);
+                    updateSelectedCount();
+                }, 3000);
+                return;
+            }
+            
+            var product = products[index];
+            var $cell = $('.stock-cell[data-product-id="' + product.id + '"]');
+            var $button = $cell.find('.refresh-stock');
+            
+            // Animation sur le bouton
+            $button.find('.dashicons').addClass('spin');
+            $cell.css('background-color', '#f0f8ff');
+            
+            $.ajax({
+                url: ajaxurl,
+                method: 'POST',
+                data: {
+                    action: 'bihr_refresh_stock',
+                    product_code: product.code,
+                    product_id: product.id,
+                    nonce: bihrProgressData.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        succeeded++;
+                        var stockLevel = response.data.stock_level;
+                        var $stockValue = $cell.find('.stock-value');
+                        var stockHtml = '<strong style="color: green;">' + stockLevel + '</strong>';
+                        
+                        if (stockLevel === 0) {
+                            stockHtml = '<strong style="color: red;">0</strong>';
+                        } else if (stockLevel < 5) {
+                            stockHtml = '<strong style="color: orange;">' + stockLevel + '</strong>';
+                        }
+                        
+                        $stockValue.html(stockHtml);
+                        
+                        // Mise à jour du statut
+                        if (response.data.updated) {
+                            var $statusLabel = $cell.find('small');
+                            if (stockLevel > 0) {
+                                $statusLabel.removeClass('stock-status-outofstock stock-status-onbackorder')
+                                           .addClass('stock-status-instock')
+                                           .text('En stock');
+                            } else {
+                                $statusLabel.removeClass('stock-status-instock stock-status-onbackorder')
+                                           .addClass('stock-status-outofstock')
+                                           .text('Rupture');
+                            }
+                        }
+                        
+                        $cell.css('background-color', '#d4edda');
+                    } else {
+                        failed++;
+                        $cell.css('background-color', '#f8d7da');
+                    }
+                },
+                error: function() {
+                    failed++;
+                    $cell.css('background-color', '#f8d7da');
+                },
+                complete: function() {
+                    $button.find('.dashicons').removeClass('spin');
+                    setTimeout(function() {
+                        $cell.css('background-color', '');
+                    }, 2000);
+                    
+                    processed++;
+                    var percent = Math.round((processed / total) * 100);
+                    $progressBar.css('width', percent + '%');
+                    $progressText.text(processed + ' / ' + total + ' produits traités');
+                    
+                    // Traiter le suivant
+                    processNext(index + 1);
+                }
+            });
+        }
+        
+        processNext(0);
+    }
+});
+</script>
