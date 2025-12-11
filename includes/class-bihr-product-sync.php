@@ -452,7 +452,10 @@ class BihrWI_Product_Sync {
             wp_mkdir_p( $upload_dir );
         }
 
-        $this->logger->log( 'Fusion catalogues: dossier = ' . $upload_dir );
+        $this->logger->log( '========================================' );
+        $this->logger->log( '=== DÉBUT FUSION DES CATALOGUES ===' );
+        $this->logger->log( '========================================' );
+        $this->logger->log( 'Dossier de recherche: ' . $upload_dir );
 
         // Recherche des différents fichiers (le plus récent pour chaque type)
         $files = array(
@@ -464,7 +467,14 @@ class BihrWI_Product_Sync {
             'attributes'         => $this->find_latest_catalog_file( $upload_dir, 'attributes' ),
         );
 
-        $this->logger->log( 'Fusion catalogues: fichiers trouvés = ' . print_r( $files, true ) );
+        $this->logger->log( '--- Fichiers catalogues trouvés ---' );
+        foreach ( $files as $type => $file ) {
+            if ( $file ) {
+                $this->logger->log( "✓ {$type}: " . basename( $file ) );
+            } else {
+                $this->logger->log( "✗ {$type}: MANQUANT" );
+            }
+        }
 
         $references_data         = array();
         $extendedreferences_data = array();
@@ -473,21 +483,28 @@ class BihrWI_Product_Sync {
         $inventory_data          = array();
         $attributes_data         = array();
 
+        $this->logger->log( '--- Parsing des fichiers CSV ---' );
+
         if ( ! empty( $files['references'] ) ) {
+            $this->logger->log( 'Parsing References...' );
             $references_data = $this->parse_references_csv( $files['references'] );
+            $this->logger->log( "✓ References: " . count( $references_data ) . " produits" );
         } else {
-            $this->logger->log( 'ATTENTION: Fichier References manquant - les noms de produits ne seront pas disponibles!' );
+            $this->logger->log( '⚠ ATTENTION: Fichier References manquant - les noms de produits ne seront pas disponibles!' );
         }
 
         if ( ! empty( $files['extendedreferences'] ) ) {
+            $this->logger->log( 'Parsing ExtendedReferences...' );
             // ExtendedReferences peut être divisé en plusieurs fichiers (_A, _B, etc.)
             $extref_pattern = str_replace( basename( $files['extendedreferences'] ), 'cat-extref-full-*.csv', $files['extendedreferences'] );
             $all_extref_files = glob( $extref_pattern );
             
             if ( ! empty( $all_extref_files ) ) {
-                $this->logger->log( 'ExtendedReferences: ' . count( $all_extref_files ) . ' fichiers trouvés' );
+                $this->logger->log( 'ExtendedReferences trouvé en ' . count( $all_extref_files ) . ' parties' );
                 foreach ( $all_extref_files as $extref_file ) {
+                    $this->logger->log( '  - Lecture: ' . basename( $extref_file ) );
                     $partial_data = $this->parse_extendedreferences_csv( $extref_file );
+                    $this->logger->log( '    → ' . count( $partial_data ) . ' produits' );
                     
                     // Merge intelligent : ne pas écraser la catégorie si elle existe déjà
                     foreach ( $partial_data as $code => $data ) {
@@ -506,28 +523,48 @@ class BihrWI_Product_Sync {
                         }
                     }
                 }
+                $this->logger->log( "✓ ExtendedReferences total: " . count( $extendedreferences_data ) . " produits" );
             } else {
                 $extendedreferences_data = $this->parse_extendedreferences_csv( $files['extendedreferences'] );
+                $this->logger->log( "✓ ExtendedReferences: " . count( $extendedreferences_data ) . " produits" );
             }
         } else {
-            $this->logger->log( 'ATTENTION: Fichier ExtendedReferences manquant - les descriptions longues ne seront pas disponibles!' );
+            $this->logger->log( '⚠ ATTENTION: Fichier ExtendedReferences manquant - les descriptions longues ne seront pas disponibles!' );
         }
 
         if ( ! empty( $files['prices'] ) ) {
+            $this->logger->log( 'Parsing Prices...' );
             $prices_data = $this->parse_prices_csv( $files['prices'] );
+            $this->logger->log( "✓ Prices: " . count( $prices_data ) . " produits" );
+        } else {
+            $this->logger->log( '⚠ ATTENTION: Fichier Prices manquant!' );
         }
 
         if ( ! empty( $files['images'] ) ) {
+            $this->logger->log( 'Parsing Images...' );
             $images_data = $this->parse_images_csv( $files['images'] );
+            $this->logger->log( "✓ Images: " . count( $images_data ) . " produits" );
+        } else {
+            $this->logger->log( '⚠ ATTENTION: Fichier Images manquant!' );
         }
 
         if ( ! empty( $files['inventory'] ) ) {
+            $this->logger->log( 'Parsing Inventory (Stock)...' );
             $inventory_data = $this->parse_inventory_csv( $files['inventory'] );
+            $this->logger->log( "✓ Inventory: " . count( $inventory_data ) . " produits" );
+        } else {
+            $this->logger->log( '⚠ ATTENTION: Fichier Inventory manquant!' );
         }
 
         if ( ! empty( $files['attributes'] ) ) {
+            $this->logger->log( 'Parsing Attributes...' );
             $attributes_data = $this->parse_attributes_csv( $files['attributes'] );
+            $this->logger->log( "✓ Attributes: " . count( $attributes_data ) . " produits" );
+        } else {
+            $this->logger->log( '⚠ ATTENTION: Fichier Attributes manquant!' );
         }
+
+        $this->logger->log( '--- Fusion des données par code produit ---' );
 
         // Fusion par code produit
         $merged = array();
@@ -594,16 +631,31 @@ class BihrWI_Product_Sync {
             $first_merged = reset( $merged );
             $first_code = key( $merged );
             reset( $merged );
-            $this->logger->log( 'Exemple de produit fusionné - Code: ' . $first_code . ', Name: ' . ( isset( $first_merged['name'] ) ? substr( $first_merged['name'], 0, 50 ) : 'NULL' ) . ', Stock: ' . ( isset( $first_merged['stock_level'] ) ? $first_merged['stock_level'] : 'NULL' ) . ', Description: ' . ( isset( $first_merged['description'] ) ? substr( $first_merged['description'], 0, 50 ) : 'NULL' ) );
+            $this->logger->log( '--- Exemple de produit fusionné ---' );
+            $this->logger->log( 'Code: ' . $first_code );
+            $this->logger->log( 'Nom: ' . ( isset( $first_merged['name'] ) ? $first_merged['name'] : 'NULL' ) );
+            $this->logger->log( 'Prix: ' . ( isset( $first_merged['dealer_price_ht'] ) ? $first_merged['dealer_price_ht'] . '€' : 'NULL' ) );
+            $this->logger->log( 'Stock: ' . ( isset( $first_merged['stock_level'] ) ? $first_merged['stock_level'] : 'NULL' ) );
+            $this->logger->log( 'Image: ' . ( isset( $first_merged['image_url'] ) ? 'OUI' : 'NON' ) );
+            $this->logger->log( 'Description: ' . ( isset( $first_merged['description'] ) ? substr( $first_merged['description'], 0, 80 ) . '...' : 'NULL' ) );
         }
 
-        // Log des statistiques de fusion
-        $this->logger->log( 'Stats fusion - References: ' . count( $references_data ) . ', ExtendedReferences: ' . count( $extendedreferences_data ) . ', Prices: ' . count( $prices_data ) . ', Images: ' . count( $images_data ) . ', Inventory: ' . count( $inventory_data ) . ', Attributes: ' . count( $attributes_data ) );
+        $this->logger->log( '--- Statistiques de fusion ---' );
+        $this->logger->log( 'References: ' . count( $references_data ) . ' entrées' );
+        $this->logger->log( 'ExtendedReferences: ' . count( $extendedreferences_data ) . ' entrées' );
+        $this->logger->log( 'Prices: ' . count( $prices_data ) . ' entrées' );
+        $this->logger->log( 'Images: ' . count( $images_data ) . ' entrées' );
+        $this->logger->log( 'Inventory: ' . count( $inventory_data ) . ' entrées' );
+        $this->logger->log( 'Attributes: ' . count( $attributes_data ) . ' entrées' );
+        $this->logger->log( 'TOTAL FUSIONNÉ: ' . count( $merged ) . ' produits uniques' );
 
         // Écriture dans la table wp_bihr_products
+        $this->logger->log( '--- Sauvegarde dans la base de données ---' );
         $count = $this->save_merged_products( $merged );
 
-        $this->logger->log( 'Fusion catalogues: terminé – ' . $count . ' produits fusionnés.' );
+        $this->logger->log( '========================================' );
+        $this->logger->log( '✓ FUSION TERMINÉE: ' . $count . ' produits enregistrés' );
+        $this->logger->log( '========================================' );
 
         return $count;
     }
