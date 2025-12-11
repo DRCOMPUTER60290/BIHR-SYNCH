@@ -460,8 +460,10 @@ jQuery(document).ready(function($) {
                     $progressBar.css('width', percent + '%');
                     $progressText.text(processed + ' / ' + total + ' produits traités');
                     
-                    // Traiter le suivant
-                    processNext(index + 1);
+                    // Délai d'1 seconde avant le suivant (rate limit API: 1 req/sec)
+                    setTimeout(function() {
+                        processNext(index + 1);
+                    }, 1100);
                 }
             });
         }
