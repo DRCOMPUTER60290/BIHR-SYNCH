@@ -248,9 +248,11 @@ class BihrWI_API_Client {
         try {
             $token = $this->get_token();
             
-            // Encoder le code produit pour l'URL
-            $encoded_code = urlencode( $product_code );
-            $url = $this->base_url . '/Inventory/StockValue?code%20produit=' . $encoded_code;
+            // Construction de l'URL avec le paramètre "code produit"
+            $url = $this->base_url . '/Inventory/StockValue';
+            $url = add_query_arg( 'code produit', $product_code, $url );
+            
+            $this->logger->log( "Appel API stock: {$url}" );
             
             $response = wp_remote_get(
                 $url,
@@ -271,13 +273,18 @@ class BihrWI_API_Client {
             $code = wp_remote_retrieve_response_code( $response );
             $body = wp_remote_retrieve_body( $response );
             
+            $this->logger->log( "Réponse API stock pour {$product_code} (HTTP {$code}): {$body}" );
+            
             if ( $code !== 200 ) {
                 $this->logger->log( "Stock API HTTP {$code} pour produit {$product_code}: {$body}" );
                 return false;
             }
 
             // L'API retourne directement la valeur du stock (nombre entier)
-            $stock_level = intval( $body );
+            // Par exemple: "20" pour 20 produits restants
+            $stock_level = intval( trim( $body ) );
+            
+            $this->logger->log( "Stock converti pour {$product_code}: {$stock_level}" );
             
             return array(
                 'stock_level' => $stock_level,
