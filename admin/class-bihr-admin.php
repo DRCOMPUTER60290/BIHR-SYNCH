@@ -222,6 +222,15 @@ class BihrWI_Admin {
             'bihrwi_margins',
             array( $this, 'render_margins_page' )
         );
+
+        add_submenu_page(
+            'bihrwi_auth',
+            __( 'Produits Importés', 'bihr-woocommerce-importer' ),
+            __( 'Produits Importés', 'bihr-woocommerce-importer' ),
+            'manage_woocommerce',
+            'bihrwi_imported_products',
+            array( $this, 'render_imported_products_page' )
+        );
     }
 
     // === RENDER PAGES ===
@@ -308,6 +317,10 @@ class BihrWI_Admin {
         $available_categories = $this->product_sync->get_distinct_categories();
 
         include BIHRWI_PLUGIN_DIR . 'admin/views/products-page.php';
+    }
+
+    public function render_imported_products_page() {
+        include BIHRWI_PLUGIN_DIR . 'admin/views/imported-products-page.php';
     }
 
     public function render_orders_settings_page() {
@@ -1010,6 +1023,7 @@ class BihrWI_Admin {
 		}
 
 		$product_code = sanitize_text_field( $_POST['product_code'] ?? '' );
+		$product_id = isset( $_POST['product_id'] ) ? intval( $_POST['product_id'] ) : 0;
 
 		if ( empty( $product_code ) ) {
 			wp_send_json_error( array( 'message' => 'Code produit manquant.' ) );
@@ -1025,15 +1039,42 @@ class BihrWI_Admin {
 				) );
 			}
 
-			$this->logger->log( sprintf(
-				'Stock temps réel récupéré pour %s: %d unités',
-				$product_code,
-				$stock_data['stock_level']
-			) );
+			$stock_level = $stock_data['stock_level'];
+
+			// Si un product_id WooCommerce est fourni, mettre à jour le stock
+			if ( $product_id > 0 ) {
+				$product = wc_get_product( $product_id );
+				if ( $product ) {
+					$product->set_stock_quantity( $stock_level );
+					
+					// Mise à jour du statut de stock
+					if ( $stock_level > 0 ) {
+						$product->set_stock_status( 'instock' );
+					} else {
+						$product->set_stock_status( 'outofstock' );
+					}
+					
+					$product->save();
+					
+					$this->logger->log( sprintf(
+						'Stock WooCommerce mis à jour pour %s (ID: %d): %d unités',
+						$product_code,
+						$product_id,
+						$stock_level
+					) );
+				}
+			} else {
+				$this->logger->log( sprintf(
+					'Stock temps réel récupéré pour %s: %d unités (pas de mise à jour WooCommerce)',
+					$product_code,
+					$stock_level
+				) );
+			}
 
 			wp_send_json_success( array(
-				'stock_level' => $stock_data['stock_level'],
-				'product_code' => $product_code
+				'stock_level' => $stock_level,
+				'product_code' => $product_code,
+				'updated' => $product_id > 0
 			) );
 
 		} catch ( Exception $e ) {

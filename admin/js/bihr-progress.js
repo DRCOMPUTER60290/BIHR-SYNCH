@@ -371,11 +371,17 @@ jQuery(document).ready(function($) {
         var $button = $(this);
         var $cell = $button.closest('.stock-cell');
         var $stockValue = $cell.find('.stock-value');
-        var productCode = $button.data('product-code');
+        var productCode = $cell.data('product-code');
+        var productId = $cell.data('product-id') || 0;
+        
+        if (!productCode) {
+            alert('Code produit introuvable.');
+            return;
+        }
         
         // Désactiver le bouton et afficher un spinner
         $button.prop('disabled', true);
-        $button.find('.dashicons').removeClass('dashicons-update').addClass('dashicons-update spin');
+        $button.find('.dashicons').addClass('spin');
         
         $.ajax({
             url: ajaxurl,
@@ -383,6 +389,7 @@ jQuery(document).ready(function($) {
             data: {
                 action: 'bihr_refresh_stock',
                 product_code: productCode,
+                product_id: productId,
                 nonce: bihrProgressData.nonce
             },
             success: function(response) {
@@ -396,7 +403,6 @@ jQuery(document).ready(function($) {
                         stockHtml = '<strong style="color: orange;">' + stockLevel + '</strong>';
                     }
                     
-                    stockHtml += '<br><small style="color: #999;">En temps réel</small>';
                     $stockValue.html(stockHtml);
                     
                     // Animation de succès
@@ -404,6 +410,22 @@ jQuery(document).ready(function($) {
                     setTimeout(function() {
                         $cell.css('background-color', '');
                     }, 2000);
+                    
+                    // Message si le stock WooCommerce a été mis à jour
+                    if (response.data.updated && productId > 0) {
+                        var $statusLabel = $cell.find('small');
+                        if ($statusLabel.length) {
+                            if (stockLevel > 0) {
+                                $statusLabel.removeClass('stock-status-outofstock stock-status-onbackorder')
+                                           .addClass('stock-status-instock')
+                                           .text('En stock');
+                            } else {
+                                $statusLabel.removeClass('stock-status-instock stock-status-onbackorder')
+                                           .addClass('stock-status-outofstock')
+                                           .text('Rupture');
+                            }
+                        }
+                    }
                 } else {
                     alert('Erreur lors de la récupération du stock : ' + response.data.message);
                 }
@@ -413,6 +435,11 @@ jQuery(document).ready(function($) {
             },
             complete: function() {
                 // Réactiver le bouton
+                $button.prop('disabled', false);
+                $button.find('.dashicons').removeClass('spin');
+            }
+        });
+    });
                 $button.prop('disabled', false);
                 $button.find('.dashicons').removeClass('spin').addClass('dashicons-update');
             }
