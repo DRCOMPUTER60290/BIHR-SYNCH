@@ -440,10 +440,5 @@ jQuery(document).ready(function($) {
             }
         });
     });
-                $button.prop('disabled', false);
-                $button.find('.dashicons').removeClass('spin').addClass('dashicons-update');
-            }
-        });
-    });
     
 });
