@@ -12,12 +12,40 @@ class BihrWI_Vehicle_Compatibility {
     protected $vehicles_table;
     protected $compatibility_table;
 
-    public function __construct( BihrWI_Logger $logger ) {
+    public function __construct( BihrWI_Logger $logger = null ) {
         global $wpdb;
         
-        $this->logger              = $logger;
+        $this->logger              = $logger ?? new BihrWI_Logger();
         $this->vehicles_table      = $wpdb->prefix . 'bihr_vehicles';
         $this->compatibility_table = $wpdb->prefix . 'bihr_vehicle_compatibility';
+        
+        // Vérifier et créer les tables si nécessaire
+        $this->ensure_tables_exist();
+    }
+
+    /**
+     * Vérifie si les tables existent et les crée si nécessaire
+     */
+    protected function ensure_tables_exist() {
+        global $wpdb;
+        
+        $vehicles_exists = $wpdb->get_var(
+            $wpdb->prepare(
+                "SHOW TABLES LIKE %s",
+                $this->vehicles_table
+            )
+        );
+        
+        $compatibility_exists = $wpdb->get_var(
+            $wpdb->prepare(
+                "SHOW TABLES LIKE %s",
+                $this->compatibility_table
+            )
+        );
+        
+        if ( ! $vehicles_exists || ! $compatibility_exists ) {
+            $this->create_tables();
+        }
     }
 
     /**

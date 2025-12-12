@@ -20,7 +20,13 @@ $stats = $compatibility->get_statistics();
 
     <?php
     // Notifications
-    if ( isset( $_GET['vehicles_imported'] ) ) : ?>
+    if ( isset( $_GET['tables_created'] ) ) : ?>
+        <div class="notice notice-success"><p>
+            ✅ <strong>Tables créées avec succès !</strong>
+        </p></div>
+    <?php endif; ?>
+
+    <?php if ( isset( $_GET['vehicles_imported'] ) ) : ?>
         <div class="notice notice-success"><p>
             ✅ <strong><?php echo intval( $_GET['vehicles_imported'] ); ?> véhicules</strong> importés avec succès !
         </p></div>
@@ -97,6 +103,13 @@ $stats = $compatibility->get_statistics();
             Importez le fichier <code>VehiclesList.csv</code> pour charger tous les véhicules disponibles.
             <br><strong>⚠️ Cette opération remplace toutes les données existantes de véhicules.</strong>
         </p>
+        
+        <div style="margin-bottom: 15px;">
+            <button type="button" class="button button-secondary" id="btn-create-tables" style="margin-right: 10px;">
+                🔧 Créer/Recréer les tables
+            </button>
+            <span id="create-tables-status" style="color: #666;"></span>
+        </div>
 
         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
             <?php wp_nonce_field( 'bihrwi_import_vehicles_action', 'bihrwi_import_vehicles_nonce' ); ?>
@@ -212,3 +225,41 @@ $stats = $compatibility->get_statistics();
     margin-top: 20px;
 }
 </style>
+
+<script>
+jQuery(document).ready(function($) {
+    // Bouton création des tables
+    $('#btn-create-tables').on('click', function() {
+        var btn = $(this);
+        var status = $('#create-tables-status');
+        
+        btn.prop('disabled', true).text('⏳ Création en cours...');
+        status.text('');
+        
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'bihrwi_create_compatibility_tables',
+                nonce: '<?php echo wp_create_nonce( 'bihrwi_ajax_nonce' ); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    status.html('<span style="color: #16a34a;">✅ ' + response.data.message + '</span>');
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    status.html('<span style="color: #dc2626;">❌ ' + response.data.message + '</span>');
+                }
+            },
+            error: function() {
+                status.html('<span style="color: #dc2626;">❌ Erreur de connexion</span>');
+            },
+            complete: function() {
+                btn.prop('disabled', false).text('🔧 Créer/Recréer les tables');
+            }
+        });
+    });
+});
+</script>

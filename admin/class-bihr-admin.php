@@ -35,6 +35,7 @@ class BihrWI_Admin {
         add_action( 'wp_ajax_bihrwi_import_vehicles', array( $this, 'ajax_import_vehicles' ) );
         add_action( 'wp_ajax_bihrwi_import_compatibility', array( $this, 'ajax_import_compatibility' ) );
         add_action( 'wp_ajax_bihrwi_import_all_compatibility', array( $this, 'ajax_import_all_compatibility' ) );
+        add_action( 'wp_ajax_bihrwi_create_compatibility_tables', array( $this, 'ajax_create_compatibility_tables' ) );
 
     }
 	
@@ -1248,6 +1249,28 @@ class BihrWI_Admin {
 				'details' => $results
 			) );
 
+		} catch ( Exception $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * AJAX: Créer/Recréer les tables de compatibilité
+	 */
+	public function ajax_create_compatibility_tables() {
+		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+		}
+
+		try {
+			$compatibility = new BihrWI_Vehicle_Compatibility();
+			$compatibility->create_tables();
+			
+			wp_send_json_success( array(
+				'message' => 'Tables créées avec succès !'
+			) );
 		} catch ( Exception $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
