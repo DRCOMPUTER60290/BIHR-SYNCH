@@ -11,6 +11,7 @@ class BihrWI_Vehicle_Compatibility {
     protected $logger;
     protected $vehicles_table;
     protected $compatibility_table;
+    protected $import_dir;
 
     public function __construct( BihrWI_Logger $logger = null ) {
         global $wpdb;
@@ -18,9 +19,20 @@ class BihrWI_Vehicle_Compatibility {
         $this->logger              = $logger ?? new BihrWI_Logger();
         $this->vehicles_table      = $wpdb->prefix . 'bihr_vehicles';
         $this->compatibility_table = $wpdb->prefix . 'bihr_vehicle_compatibility';
+        $this->import_dir          = trailingslashit( wp_upload_dir()['basedir'] ) . 'bihr-import/';
         
         // Vérifier et créer les tables si nécessaire
         $this->ensure_tables_exist();
+        $this->ensure_import_dir_exists();
+    }
+
+    /**
+     * S'assure que le dossier d'import existe
+     */
+    protected function ensure_import_dir_exists() {
+        if ( ! file_exists( $this->import_dir ) ) {
+            wp_mkdir_p( $this->import_dir );
+        }
     }
 
     /**
@@ -107,8 +119,10 @@ class BihrWI_Vehicle_Compatibility {
     /**
      * Importe la liste des véhicules depuis VehiclesList.csv
      */
-    public function import_vehicles_list( $file_path ) {
+    public function import_vehicles_list( $file_path = null ) {
         $this->logger->log( '=== IMPORT LISTE VÉHICULES ===' );
+
+        $file_path = $file_path ?: $this->import_dir . 'VehiclesList.csv';
         $this->logger->log( "Fichier: {$file_path}" );
 
         if ( ! file_exists( $file_path ) ) {
@@ -195,10 +209,65 @@ class BihrWI_Vehicle_Compatibility {
     }
 
     /**
+     * Vide les tables de compatibilité
+     */
+    public function clear_data() {
+        global $wpdb;
+
+        $wpdb->query( "TRUNCATE TABLE {$this->vehicles_table}" );
+        $wpdb->query( "TRUNCATE TABLE {$this->compatibility_table}" );
+
+        $this->logger->log( 'Tables de compatibilité vidées' );
+
+        return array(
+            'success'  => true,
+            'message'  => 'Tables vidées',
+            'vehicles' => 0,
+            'links'    => 0,
+        );
+    }
+
+    /**
+     * Décompresse une archive ZIP dans le dossier d'import
+     */
+    public function unzip_to_import_dir( $zip_path ) {
+        $this->ensure_import_dir_exists();
+
+        if ( ! file_exists( $zip_path ) ) {
+            return array(
+                'success' => false,
+                'message' => 'Archive introuvable: ' . $zip_path,
+            );
+        }
+
+        if ( ! class_exists( 'WP_Filesystem_Direct' ) ) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+        }
+        WP_Filesystem();
+
+        $result = unzip_file( $zip_path, $this->import_dir );
+
+        if ( is_wp_error( $result ) ) {
+            return array(
+                'success' => false,
+                'message' => $result->get_error_message(),
+            );
+        }
+
+        return array(
+            'success' => true,
+            'message' => 'Archive extraite',
+            'target'  => $this->import_dir,
+        );
+    }
+
+    /**
      * Importe les compatibilités depuis un fichier CSV de marque
      */
-    public function import_brand_compatibility( $file_path, $brand_name ) {
+    public function import_brand_compatibility( $brand_name, $file_path = null ) {
         $this->logger->log( "=== IMPORT COMPATIBILITÉ {$brand_name} ===" );
+
+        $file_path = $file_path ?: $this->import_dir . '[' . $brand_name . '].csv';
         $this->logger->log( "Fichier: {$file_path}" );
 
         if ( ! file_exists( $file_path ) ) {

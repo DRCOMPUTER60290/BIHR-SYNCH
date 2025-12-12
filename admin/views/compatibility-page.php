@@ -104,34 +104,34 @@ $stats = $compatibility->get_statistics();
             <br><strong>⚠️ Cette opération remplace toutes les données existantes de véhicules.</strong>
         </p>
         
-        <div style="margin-bottom: 15px;">
-            <button type="button" class="button button-secondary" id="btn-create-tables" style="margin-right: 10px;">
+        <div style="margin-bottom: 15px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="button button-secondary" id="btn-create-tables">
                 🔧 Créer/Recréer les tables
+            </button>
+            <button type="button" class="button" id="btn-clear-compatibility">
+                🗑️ Effacer toutes les données
             </button>
             <span id="create-tables-status" style="color: #666;"></span>
         </div>
 
-        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-            <?php wp_nonce_field( 'bihrwi_import_vehicles_action', 'bihrwi_import_vehicles_nonce' ); ?>
-            <input type="hidden" name="action" value="bihrwi_import_vehicles" />
-            
-            <p>
-                <label for="vehicles_file">
-                    <strong>Fichier VehiclesList.csv :</strong><br>
-                    <span style="color: #666;">
-                        Le fichier doit être dans le dossier <code>/wp-content/uploads/bihr-import/</code>
-                    </span>
-                </label><br>
-                <input type="text" 
-                       id="vehicles_file" 
-                       name="vehicles_file" 
-                       value="VehiclesList.csv" 
-                       class="regular-text" 
-                       readonly />
-            </p>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="button button-primary button-large" id="btn-import-vehicles">📥 Importer les véhicules</button>
+            <div style="flex:1; min-width:250px;">
+                <div id="vehicles-progress" style="background:#eef2ff; height:16px; border-radius:8px; overflow:hidden; border:1px solid #cbd5e1;">
+                    <div id="vehicles-progress-bar" style="height:100%; width:0%; background:#2563eb;"></div>
+                </div>
+                <div id="vehicles-progress-text" style="font-size:12px; color:#555; margin-top:4px;"></div>
+            </div>
+        </div>
 
-            <?php submit_button( '📥 Importer les véhicules', 'primary large', 'submit', false ); ?>
-        </form>
+        <div style="margin-top:15px; display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+            <div>
+                <label><strong>Uploader VehiclesList.zip</strong></label><br>
+                <input type="file" id="vehicles-zip" accept=".zip" />
+                <button type="button" class="button" id="btn-upload-vehicles-zip" style="margin-top:6px;">⬆️ Envoyer & décompresser</button>
+                <div id="vehicles-zip-status" style="font-size:12px; color:#555; margin-top:4px;"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Import des compatibilités par marque -->
@@ -157,19 +157,13 @@ $stats = $compatibility->get_statistics();
             <?php foreach ( $brands as $brand_name => $file_name ) : ?>
                 <div style="border: 1px solid #ddd; padding: 20px; border-radius: 8px; background: #fff;">
                     <h3 style="margin-top: 0;">🏷️ <?php echo esc_html( $brand_name ); ?></h3>
-                    
-                    <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin: 0;">
-                        <?php wp_nonce_field( 'bihrwi_import_compatibility_action', 'bihrwi_import_compatibility_nonce' ); ?>
-                        <input type="hidden" name="action" value="bihrwi_import_compatibility" />
-                        <input type="hidden" name="brand_name" value="<?php echo esc_attr( $brand_name ); ?>" />
-                        <input type="hidden" name="file_name" value="<?php echo esc_attr( $file_name ); ?>" />
-                        
-                        <p style="margin: 10px 0; color: #666; font-size: 13px;">
-                            📄 <code><?php echo esc_html( $file_name ); ?></code>
-                        </p>
-
-                        <?php submit_button( '📥 Importer ' . $brand_name, 'secondary', 'submit', false ); ?>
-                    </form>
+                    <p style="margin: 10px 0; color: #666; font-size: 13px;">
+                        📄 <code><?php echo esc_html( $file_name ); ?></code>
+                    </p>
+                    <button type="button" class="button brand-import-btn" data-brand="<?php echo esc_attr( $brand_name ); ?>">
+                        📥 Importer <?php echo esc_html( $brand_name ); ?>
+                    </button>
+                    <div class="brand-status" data-brand-status="<?php echo esc_attr( $brand_name ); ?>" style="font-size:12px; color:#555; margin-top:6px;"></div>
                 </div>
             <?php endforeach; ?>
         </div>
@@ -183,12 +177,25 @@ $stats = $compatibility->get_statistics();
             <br><strong>⚠️ Cette opération peut prendre plusieurs minutes.</strong>
         </p>
 
-        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-            <?php wp_nonce_field( 'bihrwi_import_all_compatibility_action', 'bihrwi_import_all_compatibility_nonce' ); ?>
-            <input type="hidden" name="action" value="bihrwi_import_all_compatibility" />
-            
-            <?php submit_button( '🚀 Importer toutes les marques', 'primary large', 'submit', false ); ?>
-        </form>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="button button-primary button-large" id="btn-import-all-brands">🚀 Importer toutes les marques</button>
+            <div style="flex:1; min-width:250px;">
+                <div id="all-brands-progress" style="background:#eef2ff; height:16px; border-radius:8px; overflow:hidden; border:1px solid #cbd5e1;">
+                    <div id="all-brands-progress-bar" style="height:100%; width:0%; background:#16a34a;"></div>
+                </div>
+                <div id="all-brands-progress-text" style="font-size:12px; color:#555; margin-top:4px;"></div>
+            </div>
+        </div>
+        <div id="all-brands-log" style="margin-top:10px; font-size:12px; color:#333; max-height:200px; overflow:auto; background:#f8fafc; border:1px solid #e2e8f0; padding:10px; border-radius:6px;"></div>
+
+        <div style="margin-top:15px; display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+            <div>
+                <label><strong>Uploader LinksList.zip (tous les CSV)</strong></label><br>
+                <input type="file" id="links-zip" accept=".zip" />
+                <button type="button" class="button" id="btn-upload-links-zip" style="margin-top:6px;">⬆️ Envoyer & décompresser</button>
+                <div id="links-zip-status" style="font-size:12px; color:#555; margin-top:4px;"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Informations -->
@@ -227,39 +234,188 @@ $stats = $compatibility->get_statistics();
 </style>
 
 <script>
-jQuery(document).ready(function($) {
-    // Bouton création des tables
+jQuery(function($) {
+    const nonce = '<?php echo wp_create_nonce( 'bihrwi_ajax_nonce' ); ?>';
+    const ajaxUrl = ajaxurl;
+    const brands = <?php echo wp_json_encode( array_keys( $brands ) ); ?>;
+
+    function setProgress(bar, textEl, pct, label) {
+        bar.css('width', pct + '%');
+        if (textEl) {
+            textEl.text(label || pct + '%');
+        }
+    }
+
+    // Créer/Recréer tables
     $('#btn-create-tables').on('click', function() {
-        var btn = $(this);
-        var status = $('#create-tables-status');
-        
+        const btn = $(this);
+        const status = $('#create-tables-status');
         btn.prop('disabled', true).text('⏳ Création en cours...');
         status.text('');
-        
+        $.post(ajaxUrl, { action: 'bihrwi_create_compatibility_tables', nonce }, function(resp) {
+            if (resp.success) {
+                status.html('<span style="color:#16a34a;">✅ ' + resp.data.message + '</span>');
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                status.html('<span style="color:#dc2626;">❌ ' + resp.data.message + '</span>');
+            }
+        }).fail(() => status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>'))
+        .always(() => btn.prop('disabled', false).text('🔧 Créer/Recréer les tables'));
+    });
+
+    // Effacer données
+    $('#btn-clear-compatibility').on('click', function() {
+        if (!confirm('Confirmer la purge des données de compatibilité ?')) return;
+        const btn = $(this);
+        const status = $('#create-tables-status');
+        btn.prop('disabled', true).text('⏳ Suppression...');
+        $.post(ajaxUrl, { action: 'bihrwi_clear_compatibility', nonce }, function(resp) {
+            if (resp.success) {
+                status.html('<span style="color:#16a34a;">✅ ' + resp.data.message + '</span>');
+                setTimeout(() => location.reload(), 1200);
+            } else {
+                status.html('<span style="color:#dc2626;">❌ ' + resp.data.message + '</span>');
+            }
+        }).fail(() => status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>'))
+        .always(() => btn.prop('disabled', false).text('🗑️ Effacer toutes les données'));
+    });
+
+    // Import véhicules
+    $('#btn-import-vehicles').on('click', function() {
+        const btn = $(this);
+        const bar = $('#vehicles-progress-bar');
+        const text = $('#vehicles-progress-text');
+        btn.prop('disabled', true).text('⏳ Import en cours...');
+        setProgress(bar, text, 10, 'Préparation...');
+
+        $.post(ajaxUrl, { action: 'bihrwi_import_vehicles', nonce }, function(resp) {
+            if (resp.success) {
+                setProgress(bar, text, 100, resp.data.message || 'Import terminé');
+            } else {
+                setProgress(bar, text, 0, resp.data.message || 'Erreur');
+            }
+        }).fail(() => setProgress(bar, text, 0, 'Erreur de connexion'))
+        .always(() => btn.prop('disabled', false).text('📥 Importer les véhicules'));
+    });
+
+    // Upload VehiclesList.zip
+    $('#btn-upload-vehicles-zip').on('click', function() {
+        const file = $('#vehicles-zip')[0].files[0];
+        const status = $('#vehicles-zip-status');
+        if (!file) {
+            status.text('Sélectionnez un fichier ZIP');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('action', 'bihrwi_upload_vehicles_zip');
+        formData.append('nonce', nonce);
+        formData.append('vehicles_zip', file);
+        status.text('⏳ Upload en cours...');
         $.ajax({
-            url: ajaxurl,
+            url: ajaxUrl,
             type: 'POST',
-            data: {
-                action: 'bihrwi_create_compatibility_tables',
-                nonce: '<?php echo wp_create_nonce( 'bihrwi_ajax_nonce' ); ?>'
-            },
-            success: function(response) {
-                if (response.success) {
-                    status.html('<span style="color: #16a34a;">✅ ' + response.data.message + '</span>');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 1500);
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(resp){
+                if (resp.success) {
+                    status.html('<span style="color:#16a34a;">✅ ' + resp.data.message + '</span>');
                 } else {
-                    status.html('<span style="color: #dc2626;">❌ ' + response.data.message + '</span>');
+                    status.html('<span style="color:#dc2626;">❌ ' + resp.data.message + '</span>');
                 }
             },
-            error: function() {
-                status.html('<span style="color: #dc2626;">❌ Erreur de connexion</span>');
-            },
-            complete: function() {
-                btn.prop('disabled', false).text('🔧 Créer/Recréer les tables');
-            }
+            error: function(){ status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>'); }
         });
+    });
+
+    // Upload LinksList.zip
+    $('#btn-upload-links-zip').on('click', function() {
+        const file = $('#links-zip')[0].files[0];
+        const status = $('#links-zip-status');
+        if (!file) {
+            status.text('Sélectionnez un fichier ZIP');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('action', 'bihrwi_upload_links_zip');
+        formData.append('nonce', nonce);
+        formData.append('links_zip', file);
+        status.text('⏳ Upload en cours...');
+        $.ajax({
+            url: ajaxUrl,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(resp){
+                if (resp.success) {
+                    status.html('<span style="color:#16a34a;">✅ ' + resp.data.message + '</span>');
+                } else {
+                    status.html('<span style="color:#dc2626;">❌ ' + resp.data.message + '</span>');
+                }
+            },
+            error: function(){ status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>'); }
+        });
+    });
+
+    // Import par marque (boutons)
+    $('.brand-import-btn').on('click', function() {
+        const brand = $(this).data('brand');
+        const status = $(".brand-status[data-brand-status='" + brand + "']");
+        const btn = $(this);
+        btn.prop('disabled', true).text('⏳ Import...');
+        status.text('Import en cours...');
+        $.post(ajaxUrl, { action: 'bihrwi_import_compatibility', nonce, brand }, function(resp) {
+            if (resp.success) {
+                status.html('<span style="color:#16a34a;">✅ ' + resp.data.message + '</span>');
+            } else {
+                status.html('<span style="color:#dc2626;">❌ ' + (resp.data.message || 'Erreur') + '</span>');
+            }
+        }).fail(() => status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>'))
+        .always(() => btn.prop('disabled', false).text('📥 Importer ' + brand));
+    });
+
+    // Import groupé avec progression (séquentiel)
+    $('#btn-import-all-brands').on('click', function() {
+        const btn = $(this);
+        const bar = $('#all-brands-progress-bar');
+        const text = $('#all-brands-progress-text');
+        const logBox = $('#all-brands-log');
+        btn.prop('disabled', true).text('⏳ Import en cours...');
+        logBox.empty();
+        setProgress(bar, text, 0, '0%');
+
+        const total = brands.length;
+        let done = 0;
+
+        function importNext() {
+            if (done >= total) {
+                setProgress(bar, text, 100, 'Terminé');
+                btn.prop('disabled', false).text('🚀 Importer toutes les marques');
+                return;
+            }
+            const brand = brands[done];
+            logBox.append('<div>⏳ ' + brand + '...</div>');
+            $.post(ajaxUrl, { action: 'bihrwi_import_compatibility', nonce, brand }, function(resp) {
+                done++;
+                const pct = Math.round((done / total) * 100);
+                setProgress(bar, text, pct, pct + '%');
+                if (resp.success) {
+                    logBox.append('<div style="color:#16a34a;">✅ ' + resp.data.message + '</div>');
+                } else {
+                    logBox.append('<div style="color:#dc2626;">❌ ' + (resp.data.message || 'Erreur') + '</div>');
+                }
+                importNext();
+            }).fail(function(){
+                done++;
+                const pct = Math.round((done / total) * 100);
+                setProgress(bar, text, pct, pct + '%');
+                logBox.append('<div style="color:#dc2626;">❌ Erreur de connexion sur ' + brand + '</div>');
+                importNext();
+            });
+        }
+
+        importNext();
     });
 });
 </script>

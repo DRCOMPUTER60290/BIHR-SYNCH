@@ -39,6 +39,10 @@ class BihrWI_Admin {
         add_action( 'wp_ajax_bihrwi_import_compatibility', array( $this, 'ajax_import_compatibility' ) );
         add_action( 'wp_ajax_bihrwi_import_all_compatibility', array( $this, 'ajax_import_all_compatibility' ) );
         add_action( 'wp_ajax_bihrwi_create_compatibility_tables', array( $this, 'ajax_create_compatibility_tables' ) );
+        add_action( 'wp_ajax_bihrwi_import_vehicles_async', array( $this, 'ajax_import_vehicles_async' ) );
+        add_action( 'wp_ajax_bihrwi_clear_compatibility', array( $this, 'ajax_clear_compatibility' ) );
+        add_action( 'wp_ajax_bihrwi_upload_vehicles_zip', array( $this, 'ajax_upload_vehicles_zip' ) );
+        add_action( 'wp_ajax_bihrwi_upload_links_zip', array( $this, 'ajax_upload_links_zip' ) );
 
     }
 	
@@ -1280,6 +1284,108 @@ class BihrWI_Admin {
 	}
 
     /**
+     * AJAX: Import véhicules (alias async)
+     */
+    public function ajax_import_vehicles_async() {
+        $this->ajax_import_vehicles();
+    }
+
+    /**
+     * AJAX: Purge des données de compatibilité
+     */
+    public function ajax_clear_compatibility() {
+        check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+        }
+
+        try {
+            $compatibility = new BihrWI_Vehicle_Compatibility();
+            $result = $compatibility->clear_data();
+
+            wp_send_json_success( array(
+                'message' => 'Tables vidées',
+                'stats'   => $result,
+            ) );
+        } catch ( Exception $e ) {
+            wp_send_json_error( array( 'message' => $e->getMessage() ) );
+        }
+    }
+
+    /**
+     * AJAX: Upload VehiclesList.zip
+     */
+    public function ajax_upload_vehicles_zip() {
+        check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+        }
+
+        if ( empty( $_FILES['vehicles_zip'] ) || ! isset( $_FILES['vehicles_zip']['tmp_name'] ) ) {
+            wp_send_json_error( array( 'message' => 'Aucun fichier reçu' ) );
+        }
+
+        try {
+            $upload = wp_handle_upload( $_FILES['vehicles_zip'], array( 'test_form' => false ) );
+            if ( isset( $upload['error'] ) ) {
+                wp_send_json_error( array( 'message' => $upload['error'] ) );
+            }
+
+            $compatibility = new BihrWI_Vehicle_Compatibility();
+            $unzip = $compatibility->unzip_to_import_dir( $upload['file'] );
+			
+            if ( ! $unzip['success'] ) {
+                wp_send_json_error( array( 'message' => $unzip['message'] ) );
+            }
+
+            wp_send_json_success( array(
+                'message' => 'Archive VehiclesList.zip importée et extraite',
+                'path'    => $upload['file'],
+            ) );
+        } catch ( Exception $e ) {
+            wp_send_json_error( array( 'message' => $e->getMessage() ) );
+        }
+    }
+
+    /**
+     * AJAX: Upload LinksList.zip
+     */
+    public function ajax_upload_links_zip() {
+        check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+        }
+
+        if ( empty( $_FILES['links_zip'] ) || ! isset( $_FILES['links_zip']['tmp_name'] ) ) {
+            wp_send_json_error( array( 'message' => 'Aucun fichier reçu' ) );
+        }
+
+        try {
+            $upload = wp_handle_upload( $_FILES['links_zip'], array( 'test_form' => false ) );
+            if ( isset( $upload['error'] ) ) {
+                wp_send_json_error( array( 'message' => $upload['error'] ) );
+            }
+
+            $compatibility = new BihrWI_Vehicle_Compatibility();
+            $unzip = $compatibility->unzip_to_import_dir( $upload['file'] );
+			
+            if ( ! $unzip['success'] ) {
+                wp_send_json_error( array( 'message' => $unzip['message'] ) );
+            }
+
+            wp_send_json_success( array(
+                'message' => 'Archive LinksList.zip importée et extraite',
+                'path'    => $upload['file'],
+            ) );
+        } catch ( Exception $e ) {
+            wp_send_json_error( array( 'message' => $e->getMessage() ) );
+        }
+    }
+
+    /**
      * Handler POST: Import de la liste des véhicules
      */
     public function handle_import_vehicles() {
@@ -1354,7 +1460,7 @@ class BihrWI_Admin {
             }
 
             $compatibility = new BihrWI_Vehicle_Compatibility();
-            $result = $compatibility->import_brand_compatibility( $file_path, $brand );
+            $result = $compatibility->import_brand_compatibility( $brand, $file_path );
 
             if ( $result['success'] ) {
                 $redirect_url = add_query_arg( array(
@@ -1399,7 +1505,7 @@ class BihrWI_Admin {
                 $file_path = $import_dir . '[' . $brand . '].csv';
 				
                 if ( file_exists( $file_path ) ) {
-                    $result = $compatibility->import_brand_compatibility( $file_path, $brand );
+                    $result = $compatibility->import_brand_compatibility( $brand, $file_path );
 					
                     if ( $result['success'] ) {
                         $total_imported += $result['imported'];
