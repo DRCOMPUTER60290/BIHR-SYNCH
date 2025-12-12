@@ -109,6 +109,16 @@ class BihrWI_Order_Sync {
                     if ( $status_result && isset( $status_result['request_status'] ) ) {
                         $this->logger->log( "[{$ticket_id}]    → Statut: {$status_result['request_status']}" );
                     }
+                    
+                    // Récupérer les données complètes de la commande
+                    $this->logger->log( "[{$ticket_id}] 📊 Récupération des données complètes de la commande..." );
+                    $order_data_result = $this->api_client->get_order_data( $bihr_ticket_id );
+                    
+                    if ( $order_data_result ) {
+                        $this->logger->log( "[{$ticket_id}]    ✅ Données de commande récupérées avec succès" );
+                    } else {
+                        $this->logger->log( "[{$ticket_id}]    ⚠️ Impossible de récupérer les données de commande" );
+                    }
                 }
                 
                 if ( $bihr_ticket_id ) {

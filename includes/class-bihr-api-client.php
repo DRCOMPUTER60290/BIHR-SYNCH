@@ -336,6 +336,20 @@ class BihrWI_API_Client {
             $body = wp_remote_retrieve_body( $response );
             
             $this->logger->log( "Order Status HTTP: {$code}" );
+            $this->logger->log( "=== RÉPONSE GenerationStatus ===" );
+            
+            // Logger la réponse JSON formatée
+            if ( ! empty( $body ) ) {
+                $formatted_json = json_encode( json_decode( $body ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+                if ( $formatted_json ) {
+                    foreach ( explode( "\n", $formatted_json ) as $line ) {
+                        $this->logger->log( "  " . $line );
+                    }
+                } else {
+                    $this->logger->log( "  Body: {$body}" );
+                }
+            }
+            $this->logger->log( "================================" );
             
             if ( $code !== 200 ) {
                 $this->logger->log( "Order Status Check Failed: HTTP {$code}" );
@@ -357,6 +371,77 @@ class BihrWI_API_Client {
 
         } catch ( Exception $e ) {
             $this->logger->log( 'Order Status Exception: ' . $e->getMessage() );
+            return false;
+        }
+    }
+
+    /**
+     * Récupère les données détaillées d'une commande
+     * Endpoint: GET /api/v2.1/Order/Data?TicketId={ticketId}
+     * 
+     * @param string $ticket_id Le TicketId retourné par Order/Creation
+     * @return array|false Données de la commande ou false
+     */
+    public function get_order_data( $ticket_id ) {
+        try {
+            $token = $this->get_token();
+            
+            $url = $this->base_url . '/Order/Data';
+            $url_with_param = add_query_arg( 'TicketId', $ticket_id, $url );
+            
+            $this->logger->log( "Order Data Request: {$url_with_param}" );
+            
+            $response = wp_remote_get(
+                $url_with_param,
+                array(
+                    'timeout' => 15,
+                    'headers' => array(
+                        'Authorization' => 'Bearer ' . $token,
+                        'Accept'        => 'application/json',
+                    ),
+                )
+            );
+
+            if ( is_wp_error( $response ) ) {
+                $this->logger->log( 'Order Data Error: ' . $response->get_error_message() );
+                return false;
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+            $body = wp_remote_retrieve_body( $response );
+            
+            $this->logger->log( "Order Data HTTP: {$code}" );
+            $this->logger->log( "=== RÉPONSE Order/Data ===" );
+            
+            // Logger la réponse JSON formatée
+            if ( ! empty( $body ) ) {
+                $formatted_json = json_encode( json_decode( $body ), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+                if ( $formatted_json ) {
+                    foreach ( explode( "\n", $formatted_json ) as $line ) {
+                        $this->logger->log( "  " . $line );
+                    }
+                } else {
+                    $this->logger->log( "  Body: {$body}" );
+                }
+            }
+            $this->logger->log( "==========================" );
+            
+            if ( $code !== 200 ) {
+                $this->logger->log( "Order Data Request Failed: HTTP {$code}" );
+                return false;
+            }
+
+            $data = json_decode( $body, true );
+            
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                $this->logger->log( 'Order Data: Invalid JSON response' );
+                return false;
+            }
+            
+            return $data;
+
+        } catch ( Exception $e ) {
+            $this->logger->log( 'Order Data Exception: ' . $e->getMessage() );
             return false;
         }
     }
