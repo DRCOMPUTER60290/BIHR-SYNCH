@@ -299,4 +299,65 @@ class BihrWI_API_Client {
             return false;
         }
     }
+
+    /**
+     * Vérifie le statut de génération d'une commande
+     * Endpoint: GET /api/v2.1/Order/GenerationStatus?TicketId={ticketId}
+     * 
+     * @param string $ticket_id Le TicketId retourné par Order/Creation
+     * @return array Données de statut incluant OrderUrl et RequestStatus
+     */
+    public function get_order_generation_status( $ticket_id ) {
+        try {
+            $token = $this->get_token();
+            
+            $url = $this->base_url . '/Order/GenerationStatus';
+            $url_with_param = add_query_arg( 'TicketId', $ticket_id, $url );
+            
+            $this->logger->log( "Order Status Check: {$url_with_param}" );
+            
+            $response = wp_remote_get(
+                $url_with_param,
+                array(
+                    'timeout' => 15,
+                    'headers' => array(
+                        'Authorization' => 'Bearer ' . $token,
+                        'Accept'        => 'application/json',
+                    ),
+                )
+            );
+
+            if ( is_wp_error( $response ) ) {
+                $this->logger->log( 'Order Status Error: ' . $response->get_error_message() );
+                return false;
+            }
+
+            $code = wp_remote_retrieve_response_code( $response );
+            $body = wp_remote_retrieve_body( $response );
+            
+            $this->logger->log( "Order Status HTTP: {$code}" );
+            
+            if ( $code !== 200 ) {
+                $this->logger->log( "Order Status Check Failed: HTTP {$code}" );
+                return false;
+            }
+
+            $data = json_decode( $body, true );
+            
+            if ( json_last_error() !== JSON_ERROR_NONE ) {
+                $this->logger->log( 'Order Status: Invalid JSON response' );
+                return false;
+            }
+            
+            return array(
+                'order_url'      => $data['OrderUrl'] ?? '',
+                'request_status' => $data['RequestStatus'] ?? '',
+                'data'           => $data,
+            );
+
+        } catch ( Exception $e ) {
+            $this->logger->log( 'Order Status Exception: ' . $e->getMessage() );
+            return false;
+        }
+    }
 }

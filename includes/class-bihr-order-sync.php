@@ -89,13 +89,26 @@ class BihrWI_Order_Sync {
             $result = $this->send_order_to_bihr( $order_data, $ticket_id );
 
             if ( $result && isset( $result['success'] ) && $result['success'] ) {
-                $bihr_order_id = $result['order_id'] ?? 'N/A';
                 $bihr_ticket_id = $result['bihr_ticket_id'] ?? '';
+                $result_code = $result['result_code'] ?? '';
                 
-                $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 4/6 : API BIHR - Réponse positive" );
+                $this->logger->log( "[{$ticket_id}] ✅ ÉTAPE 4/6 : API BIHR - Demande de création acceptée" );
                 
-                if ( $bihr_order_id && $bihr_order_id !== 'N/A' ) {
-                    $this->logger->log( "[{$ticket_id}]    → BIHR Order ID: {$bihr_order_id}" );
+                if ( $bihr_ticket_id ) {
+                    $this->logger->log( "[{$ticket_id}]    → BIHR Ticket ID: {$bihr_ticket_id}" );
+                    
+                    // Vérifier le statut de génération (workflow asynchrone)
+                    $this->logger->log( "[{$ticket_id}] 🔄 Vérification du statut de génération..." );
+                    $status_result = $this->check_order_generation_status( $bihr_ticket_id, $ticket_id );
+                    
+                    if ( $status_result && isset( $status_result['order_url'] ) ) {
+                        $this->logger->log( "[{$ticket_id}]    → URL de la commande: {$status_result['order_url']}" );
+                        update_post_meta( $order_id, '_bihr_order_url', $status_result['order_url'] );
+                    }
+                    
+                    if ( $status_result && isset( $status_result['request_status'] ) ) {
+                        $this->logger->log( "[{$ticket_id}]    → Statut: {$status_result['request_status']}" );
+                    }
                 }
                 
                 if ( $bihr_ticket_id ) {
@@ -228,9 +241,7 @@ class BihrWI_Order_Sync {
             $lines[] = array(
                 'ProductId'         => $bihr_code,
                 'Quantity'          => $item->get_quantity(),
-                'ReferenceType'     => 'Not used anymore',
                 'CustomerReference' => $product->get_name(),
-                'ReservedQuantity'  => 0,
             );
         }
 
@@ -251,21 +262,17 @@ class BihrWI_Order_Sync {
         
         $this->logger->log( "[{$ticket_id}]    📝 Référence client: {$customer_reference}" );
 
-        // Récupération des options de configuration
-        $auto_checkout      = get_option( 'bihrwi_auto_checkout', true );
-        $weekly_free_ship   = get_option( 'bihrwi_weekly_free_shipping', true );
-        $delivery_mode      = get_option( 'bihrwi_delivery_mode', 'Default' );
+        // Récupération de l'option de validation automatique
+        $auto_checkout = get_option( 'bihrwi_auto_checkout', true );
         
-        $this->logger->log( "[{$ticket_id}]    ⚙️ Options: Checkout auto={$auto_checkout}, Livraison gratuite={$weekly_free_ship}, Mode={$delivery_mode}" );
+        $this->logger->log( "[{$ticket_id}]    ⚙️ Option: Checkout automatique=" . ( $auto_checkout ? 'activé' : 'désactivé' ) );
 
-        // Construction des données de commande
+        // Construction des données de commande selon nouvelle API doc
         $order_data = array(
             'Order' => array(
                 'CustomerReference'              => $customer_reference,
                 'Lines'                          => $lines,
                 'IsAutomaticCheckoutActivated'   => (bool) $auto_checkout,
-                'IsWeeklyFreeShippingActivated'  => (bool) $weekly_free_ship,
-                'DeliveryMode'                   => $delivery_mode,
             ),
         );
 
@@ -344,6 +351,47 @@ class BihrWI_Order_Sync {
         }
 
         return $phone;
+    }
+
+    /**
+     * Vérifie le statut de génération d'une commande (workflow asynchrone)
+     * 
+     * @param string $bihr_ticket_id TicketId retourné par l'API
+     * @param string $ticket_id Identifiant de suivi interne
+     * @return array|false Résultat du statut ou false
+     */
+    protected function check_order_generation_status( $bihr_ticket_id, $ticket_id = '' ) {
+        if ( empty( $bihr_ticket_id ) ) {
+            return false;
+        }
+
+        $this->logger->log( "[{$ticket_id}]    🔍 Vérification du statut avec TicketId: {$bihr_ticket_id}" );
+        
+        // Attendre 2 secondes pour laisser l'API traiter la demande
+        sleep( 2 );
+        
+        $result = $this->api_client->get_order_generation_status( $bihr_ticket_id );
+        
+        if ( ! $result ) {
+            $this->logger->log( "[{$ticket_id}]    ⚠️ Impossible de récupérer le statut" );
+            return false;
+        }
+        
+        $request_status = $result['request_status'] ?? '';
+        $order_url = $result['order_url'] ?? '';
+        
+        if ( $request_status === 'Running' ) {
+            $this->logger->log( "[{$ticket_id}]    ⏳ Création en cours (Running)..." );
+        } elseif ( $request_status === 'Cart' ) {
+            $this->logger->log( "[{$ticket_id}]    🛒 Panier créé avec succès" );
+        } elseif ( $request_status === 'Order' ) {
+            $this->logger->log( "[{$ticket_id}]    📦 Commande créée avec succès" );
+        } elseif ( ! empty( $request_status ) ) {
+            // Message d'erreur ou problème métier
+            $this->logger->log( "[{$ticket_id}]    ⚠️ Statut: {$request_status}" );
+        }
+        
+        return $result;
     }
 
     /**
@@ -448,33 +496,31 @@ class BihrWI_Order_Sync {
         }
 
         if ( $status_code >= 200 && $status_code < 300 ) {
-            // Récupération de l'ID de commande BIHR
-            $bihr_order_id = $data['OrderId'] ?? $data['orderId'] ?? $data['order_id'] ?? '';
-            
-            // Récupération du Ticket ID BIHR pour la traçabilité
-            $bihr_ticket_id = $data['TicketId'] ?? $data['ticketId'] ?? $data['ticket_id'] ?? '';
-            
-            // Affichage des informations de succès
-            if ( $bihr_order_id ) {
-                $this->logger->log( "[{$ticket_id}]    ✅ Succès - BIHR Order ID: {$bihr_order_id}" );
-            } else {
-                $this->logger->log( "[{$ticket_id}]    ✅ Succès - Commande créée" );
-            }
+            // Nouveau workflow asynchrone : récupération du TicketId et ResultCode
+            $bihr_ticket_id = $data['TicketId'] ?? $data['ticketId'] ?? '';
+            $result_code = $data['ResultCode'] ?? '';
             
             if ( $bihr_ticket_id ) {
-                $this->logger->log( "[{$ticket_id}]    🎫 BIHR Ticket ID: {$bihr_ticket_id}" );
+                $this->logger->log( "[{$ticket_id}]    ✅ Demande acceptée - BIHR Ticket ID: {$bihr_ticket_id}" );
+            } else {
+                $this->logger->log( "[{$ticket_id}]    ✅ Demande acceptée" );
             }
             
-            // Log du message de résultat si disponible
-            if ( isset( $data['ResultCode'] ) ) {
-                $this->logger->log( "[{$ticket_id}]    📋 Résultat: {$data['ResultCode']}" );
+            // Log du ResultCode
+            if ( $result_code ) {
+                $this->logger->log( "[{$ticket_id}]    📋 ResultCode: {$result_code}" );
+                
+                if ( strpos( $result_code, 'Cart creation requested' ) !== false ) {
+                    $this->logger->log( "[{$ticket_id}]    🛒 Un panier sera créé (validation manuelle requise sur mybihr.com)" );
+                } elseif ( strpos( $result_code, 'Order creation requested' ) !== false ) {
+                    $this->logger->log( "[{$ticket_id}]    📦 Une commande sera créée automatiquement" );
+                }
             }
             
             return array(
                 'success'        => true,
-                'order_id'       => $bihr_order_id,
                 'bihr_ticket_id' => $bihr_ticket_id,
-                'result_code'    => $data['ResultCode'] ?? '',
+                'result_code'    => $result_code,
                 'data'           => $data,
                 'http_code'      => $status_code,
             );

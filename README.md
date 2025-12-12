@@ -308,11 +308,11 @@ Lorsqu'un client passe une commande sur votre boutique WooCommerce :
 | Option | Description | Défaut |
 |--------|-------------|--------|
 | **Synchronisation auto** | Active/désactive l'envoi automatique | ✅ Activé |
-| **Validation automatique** | Les commandes sont validées sans intervention | ✅ Activé |
-| **Livraison gratuite hebdomadaire** | Bénéficier de la livraison gratuite BIHR | ✅ Activé |
-| **Mode de livraison** | Default, Express ou Standard | Default |
+| **Validation automatique** | Les commandes sont transformées en commande automatiquement | ✅ Activé |
 
 #### Format de commande BIHR
+
+Structure simplifiée selon la nouvelle API v2.1 :
 
 ```json
 {
@@ -322,14 +322,10 @@ Lorsqu'un client passe une commande sur votre boutique WooCommerce :
       {
         "ProductId": "TPCI07495",
         "Quantity": 2,
-        "ReferenceType": "Not used anymore",
-        "CustomerReference": "Nom du produit",
-        "ReservedQuantity": 0
+        "CustomerReference": "Nom du produit"
       }
     ],
-    "IsAutomaticCheckoutActivated": true,
-    "IsWeeklyFreeShippingActivated": true,
-    "DeliveryMode": "Default"
+    "IsAutomaticCheckoutActivated": true
   },
   "DropShippingAddress": {
     "FirstName": "John",
@@ -351,12 +347,35 @@ Le plugin stocke les informations suivantes sur chaque commande WooCommerce :
 | Meta Key | Description |
 |----------|-------------|
 | `_bihr_order_synced` | Commande synchronisée avec succès |
-| `_bihr_order_id` | ID de la commande côté BIHR |
 | `_bihr_sync_ticket_id` | Ticket ID WooCommerce (identifiant interne) |
 | `_bihr_api_ticket_id` | Ticket ID retourné par l'API BIHR |
+| `_bihr_order_url` | URL de la commande/panier sur mybihr.com |
 | `_bihr_sync_date` | Date et heure de synchronisation |
 | `_bihr_order_sync_failed` | Échec de synchronisation |
 | `_bihr_sync_error` | Message d'erreur détaillé |
+
+#### Workflow asynchrone (nouveau)
+
+La création de commande suit maintenant un workflow asynchrone similaire aux catalogues :
+
+1. **Envoi** : POST `/api/v2.1/Order/Creation`
+   - Retourne : `ResultCode` et `TicketId`
+   - ResultCode peut être :
+     - "Cart creation requested" → Panier créé (validation manuelle sur mybihr.com)
+     - "Order creation requested" → Commande créée automatiquement
+
+2. **Vérification** : GET `/api/v2.1/Order/GenerationStatus?TicketId={id}`
+   - Retourne : `OrderUrl` et `RequestStatus`
+   - RequestStatus peut être :
+     - "Running" → Création en cours
+     - "Cart" → Panier créé avec succès
+     - "Order" → Commande créée avec succès
+     - Message d'erreur si problème métier
+
+3. **Stockage** : Le plugin enregistre automatiquement :
+   - L'URL de la commande (`_bihr_order_url`)
+   - Le TicketId BIHR (`_bihr_api_ticket_id`)
+   - Le statut final dans les notes de commande
 
 #### Format de réponse BIHR
 
@@ -370,8 +389,9 @@ L'API BIHR retourne la réponse suivante lors de la création d'une commande :
 ```
 
 Le plugin capture automatiquement :
-- **ResultCode** : Message de confirmation (ex: "Cart creation requested")
-- **TicketId** : Identifiant unique de la commande côté BIHR (stocké dans `_bihr_api_ticket_id`)
+- **ResultCode** : Type de création ("Cart creation requested" ou "Order creation requested")
+- **TicketId** : Identifiant unique pour vérifier le statut (stocké dans `_bihr_api_ticket_id`)
+- **OrderUrl** : URL de la commande sur mybihr.com (récupéré via GenerationStatus, stocké dans `_bihr_order_url`)
 
 Ces informations sont visibles dans :
 - 📝 Les métadonnées de commande WooCommerce
