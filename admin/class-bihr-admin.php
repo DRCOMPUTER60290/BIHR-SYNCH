@@ -26,6 +26,9 @@ class BihrWI_Admin {
 		add_action( 'admin_post_bihrwi_check_prices_now', array( $this, 'handle_check_prices_now' ) );
 		add_action( 'admin_post_bihrwi_reset_data', array( $this, 'handle_reset_data' ) );
 		add_action( 'admin_post_bihrwi_download_all_catalogs', array( $this, 'handle_download_all_catalogs' ) );
+        add_action( 'admin_post_bihrwi_import_vehicles', array( $this, 'handle_import_vehicles' ) );
+        add_action( 'admin_post_bihrwi_import_compatibility', array( $this, 'handle_import_compatibility' ) );
+        add_action( 'admin_post_bihrwi_import_all_compatibility', array( $this, 'handle_import_all_compatibility' ) );
 
         // Handlers AJAX
         add_action( 'wp_ajax_bihrwi_download_all_catalogs_ajax', array( $this, 'ajax_download_all_catalogs' ) );
@@ -1275,6 +1278,148 @@ class BihrWI_Admin {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 	}
+
+    /**
+     * Handler POST: Import de la liste des véhicules
+     */
+    public function handle_import_vehicles() {
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( 'Permission refusée' );
+        }
+
+        check_admin_referer( 'bihrwi_import_vehicles_action', 'bihrwi_import_vehicles_nonce' );
+
+        $redirect_url = add_query_arg( array( 'page' => 'bihrwi_compatibility' ), admin_url( 'admin.php' ) );
+
+        try {
+            // Construire le chemin du fichier
+            $upload_dir = wp_upload_dir();
+            $import_dir = $upload_dir['basedir'] . '/bihr-import/';
+            $file_path = $import_dir . 'VehiclesList.csv';
+
+            if ( ! file_exists( $file_path ) ) {
+                $redirect_url = add_query_arg( 'error', urlencode( 'Fichier VehiclesList.csv introuvable dans ' . $import_dir ), $redirect_url );
+                wp_safe_redirect( $redirect_url );
+                exit;
+            }
+
+            $compatibility = new BihrWI_Vehicle_Compatibility();
+            $result = $compatibility->import_vehicles_list( $file_path );
+
+            if ( $result['success'] ) {
+                $redirect_url = add_query_arg( array(
+                    'vehicles_imported' => $result['imported']
+                ), $redirect_url );
+            } else {
+                $redirect_url = add_query_arg( 'error', urlencode( $result['message'] ), $redirect_url );
+            }
+
+        } catch ( Exception $e ) {
+            $redirect_url = add_query_arg( 'error', urlencode( $e->getMessage() ), $redirect_url );
+        }
+
+        wp_safe_redirect( $redirect_url );
+        exit;
+    }
+
+    /**
+     * Handler POST: Import de compatibilités pour une marque
+     */
+    public function handle_import_compatibility() {
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( 'Permission refusée' );
+        }
+
+        check_admin_referer( 'bihrwi_import_compatibility_action', 'bihrwi_import_compatibility_nonce' );
+
+        $redirect_url = add_query_arg( array( 'page' => 'bihrwi_compatibility' ), admin_url( 'admin.php' ) );
+        $brand = isset( $_POST['brand'] ) ? sanitize_text_field( $_POST['brand'] ) : '';
+
+        if ( empty( $brand ) ) {
+            $redirect_url = add_query_arg( 'error', urlencode( 'Marque non spécifiée' ), $redirect_url );
+            wp_safe_redirect( $redirect_url );
+            exit;
+        }
+
+        try {
+            // Construire le chemin du fichier
+            $upload_dir = wp_upload_dir();
+            $import_dir = $upload_dir['basedir'] . '/bihr-import/';
+            $file_path = $import_dir . '[' . $brand . '].csv';
+
+            if ( ! file_exists( $file_path ) ) {
+                $redirect_url = add_query_arg( 'error', urlencode( 'Fichier [' . $brand . '].csv introuvable' ), $redirect_url );
+                wp_safe_redirect( $redirect_url );
+                exit;
+            }
+
+            $compatibility = new BihrWI_Vehicle_Compatibility();
+            $result = $compatibility->import_brand_compatibility( $file_path, $brand );
+
+            if ( $result['success'] ) {
+                $redirect_url = add_query_arg( array(
+                    'compatibility_imported' => $result['imported'],
+                    'brand' => urlencode( $brand )
+                ), $redirect_url );
+            } else {
+                $redirect_url = add_query_arg( 'error', urlencode( $result['message'] ), $redirect_url );
+            }
+
+        } catch ( Exception $e ) {
+            $redirect_url = add_query_arg( 'error', urlencode( $e->getMessage() ), $redirect_url );
+        }
+
+        wp_safe_redirect( $redirect_url );
+        exit;
+    }
+
+    /**
+     * Handler POST: Import de toutes les compatibilités
+     */
+    public function handle_import_all_compatibility() {
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_die( 'Permission refusée' );
+        }
+
+        check_admin_referer( 'bihrwi_import_all_compatibility_action', 'bihrwi_import_all_compatibility_nonce' );
+
+        $redirect_url = add_query_arg( array( 'page' => 'bihrwi_compatibility' ), admin_url( 'admin.php' ) );
+
+        try {
+            $upload_dir = wp_upload_dir();
+            $import_dir = $upload_dir['basedir'] . '/bihr-import/';
+			
+            $compatibility = new BihrWI_Vehicle_Compatibility();
+            $brands = array( 'SHIN YO', 'TECNIUM', 'V BIKE', 'V PARTS', 'VECTOR', 'VICMA' );
+			
+            $total_imported = 0;
+            $total_errors = 0;
+
+            foreach ( $brands as $brand ) {
+                $file_path = $import_dir . '[' . $brand . '].csv';
+				
+                if ( file_exists( $file_path ) ) {
+                    $result = $compatibility->import_brand_compatibility( $file_path, $brand );
+					
+                    if ( $result['success'] ) {
+                        $total_imported += $result['imported'];
+                        $total_errors += $result['errors'];
+                    }
+                }
+            }
+
+            $redirect_url = add_query_arg( array(
+                'compatibility_imported' => $total_imported,
+                'brand' => 'Toutes les marques'
+            ), $redirect_url );
+
+        } catch ( Exception $e ) {
+            $redirect_url = add_query_arg( 'error', urlencode( $e->getMessage() ), $redirect_url );
+        }
+
+        wp_safe_redirect( $redirect_url );
+        exit;
+    }
 
 	
 	

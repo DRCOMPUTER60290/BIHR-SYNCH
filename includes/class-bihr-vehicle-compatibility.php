@@ -113,7 +113,12 @@ class BihrWI_Vehicle_Compatibility {
 
         if ( ! file_exists( $file_path ) ) {
             $this->logger->log( 'Erreur: Fichier introuvable' );
-            return false;
+            return array(
+                'success' => false,
+                'message' => 'Fichier introuvable: ' . $file_path,
+                'imported' => 0,
+                'errors' => 0
+            );
         }
 
         global $wpdb;
@@ -125,14 +130,24 @@ class BihrWI_Vehicle_Compatibility {
         $handle = fopen( $file_path, 'r' );
         if ( ! $handle ) {
             $this->logger->log( 'Erreur: Impossible d\'ouvrir le fichier' );
-            return false;
+            return array(
+                'success' => false,
+                'message' => 'Impossible d\'ouvrir le fichier',
+                'imported' => 0,
+                'errors' => 0
+            );
         }
 
         // Lire le header
         $header = fgetcsv( $handle, 10000, ',' );
         if ( ! $header ) {
             fclose( $handle );
-            return false;
+            return array(
+                'success' => false,
+                'message' => 'Fichier CSV invalide (header manquant)',
+                'imported' => 0,
+                'errors' => 0
+            );
         }
 
         $count = 0;
@@ -171,7 +186,12 @@ class BihrWI_Vehicle_Compatibility {
         $this->logger->log( "✓ Import terminé: {$count} véhicules importés, {$errors} erreurs" );
         $this->logger->log( '==============================' );
 
-        return $count;
+        return array(
+            'success' => true,
+            'message' => "{$count} véhicules importés, {$errors} erreurs",
+            'imported' => $count,
+            'errors' => $errors
+        );
     }
 
     /**
@@ -183,7 +203,12 @@ class BihrWI_Vehicle_Compatibility {
 
         if ( ! file_exists( $file_path ) ) {
             $this->logger->log( 'Erreur: Fichier introuvable' );
-            return false;
+            return array(
+                'success' => false,
+                'message' => 'Fichier introuvable: ' . $file_path,
+                'imported' => 0,
+                'errors' => 0
+            );
         }
 
         global $wpdb;
@@ -191,14 +216,24 @@ class BihrWI_Vehicle_Compatibility {
         $handle = fopen( $file_path, 'r' );
         if ( ! $handle ) {
             $this->logger->log( 'Erreur: Impossible d\'ouvrir le fichier' );
-            return false;
+            return array(
+                'success' => false,
+                'message' => 'Impossible d\'ouvrir le fichier',
+                'imported' => 0,
+                'errors' => 0
+            );
         }
 
         // Lire le header
         $header = fgetcsv( $handle, 10000, ',' );
         if ( ! $header ) {
             fclose( $handle );
-            return false;
+            return array(
+                'success' => false,
+                'message' => 'Fichier CSV invalide (header manquant)',
+                'imported' => 0,
+                'errors' => 0
+            );
         }
 
         $count = 0;
@@ -234,7 +269,12 @@ class BihrWI_Vehicle_Compatibility {
         $this->logger->log( "✓ Import terminé: {$count} compatibilités importées, {$errors} erreurs" );
         $this->logger->log( '==============================' );
 
-        return $count;
+        return array(
+            'success' => true,
+            'message' => "{$count} compatibilités importées pour {$brand_name}, {$errors} erreurs",
+            'imported' => $count,
+            'errors' => $errors
+        );
     }
 
     /**
