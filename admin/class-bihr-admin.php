@@ -141,16 +141,16 @@ class BihrWI_Admin {
                 
                 try {
                     $product_sync = new BihrWI_Product_Sync( $logger );
-                    $result = $product_sync->merge_all_catalogs();
+                    $total_products = $product_sync->merge_catalogs_from_directory();
                     
-                    if ( $result['success'] ) {
-                        $logger->log( "Fusion automatique réussie: {$result['total_products']} produits" );
+                    if ( $total_products > 0 ) {
+                        $logger->log( "Fusion automatique réussie: {$total_products} produits" );
                         
                         $redirect_url = add_query_arg(
                             array(
                                 'bihrwi_check_status' => 'done_and_merged',
                                 'bihrwi_file'         => urlencode( $file_path ),
-                                'total_products'      => $result['total_products'],
+                                'total_products'      => $total_products,
                             ),
                             $redirect_url
                         );
