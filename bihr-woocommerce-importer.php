@@ -25,6 +25,7 @@ require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-api-client.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-ai-enrichment.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-product-sync.php';
 require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-order-sync.php';
+require_once BIHRWI_PLUGIN_DIR . 'includes/class-bihr-vehicle-compatibility.php';
 require_once BIHRWI_PLUGIN_DIR . 'admin/class-bihr-admin.php';
 
 // Activation : création table + dossier logs
@@ -64,6 +65,10 @@ function bihrwi_activate_plugin() {
     ) $charset_collate;";
 
     dbDelta( $sql );
+    
+    // Tables pour la compatibilité véhicules
+    require_once( dirname( __FILE__ ) . '/includes/class-bihr-vehicle-compatibility.php' );
+    BihrWI_Vehicle_Compatibility::create_tables();
 }
 
 // Ajoute un intervalle "tous les 5 minutes" pour WP-Cron

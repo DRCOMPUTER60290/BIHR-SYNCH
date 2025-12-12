@@ -32,6 +32,9 @@ class BihrWI_Admin {
         add_action( 'wp_ajax_bihrwi_merge_catalogs_ajax', array( $this, 'ajax_merge_catalogs' ) );
         add_action( 'wp_ajax_bihrwi_import_single_product', array( $this, 'ajax_import_single_product' ) );
         add_action( 'wp_ajax_bihr_refresh_stock', array( $this, 'ajax_refresh_stock' ) );
+        add_action( 'wp_ajax_bihrwi_import_vehicles', array( $this, 'ajax_import_vehicles' ) );
+        add_action( 'wp_ajax_bihrwi_import_compatibility', array( $this, 'ajax_import_compatibility' ) );
+        add_action( 'wp_ajax_bihrwi_import_all_compatibility', array( $this, 'ajax_import_all_compatibility' ) );
 
     }
 	
@@ -267,6 +270,15 @@ class BihrWI_Admin {
             'bihrwi_imported_products',
             array( $this, 'render_imported_products_page' )
         );
+
+        add_submenu_page(
+            'bihrwi_auth',
+            __( 'Compatibilité Véhicules', 'bihr-woocommerce-importer' ),
+            __( 'Compatibilité', 'bihr-woocommerce-importer' ),
+            'manage_woocommerce',
+            'bihrwi_compatibility',
+            array( $this, 'render_compatibility_page' )
+        );
     }
 
     // === RENDER PAGES ===
@@ -357,6 +369,10 @@ class BihrWI_Admin {
 
     public function render_imported_products_page() {
         include BIHRWI_PLUGIN_DIR . 'admin/views/imported-products-page.php';
+    }
+
+    public function render_compatibility_page() {
+        include BIHRWI_PLUGIN_DIR . 'admin/views/compatibility-page.php';
     }
 
     public function render_orders_settings_page() {
@@ -1115,6 +1131,124 @@ class BihrWI_Admin {
 
 		} catch ( Exception $e ) {
 			$this->logger->log( 'AJAX: Erreur refresh stock - ' . $e->getMessage() );
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * AJAX: Import de la liste des véhicules depuis VehiclesList.csv
+	 */
+	public function ajax_import_vehicles() {
+		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+		}
+
+		try {
+			$compatibility = new BihrWI_Vehicle_Compatibility();
+			$result = $compatibility->import_vehicles_list();
+			
+			if ( $result['success'] ) {
+				wp_send_json_success( array(
+					'message' => sprintf(
+						'Import terminé : %d véhicules importés, %d échecs',
+						$result['imported'],
+						$result['errors']
+					),
+					'imported' => $result['imported'],
+					'errors' => $result['errors']
+				) );
+			} else {
+				wp_send_json_error( array( 'message' => $result['message'] ) );
+			}
+		} catch ( Exception $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * AJAX: Import de compatibilités pour une marque spécifique
+	 */
+	public function ajax_import_compatibility() {
+		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+		}
+
+		$brand = isset( $_POST['brand'] ) ? sanitize_text_field( $_POST['brand'] ) : '';
+		
+		if ( empty( $brand ) ) {
+			wp_send_json_error( array( 'message' => 'Marque non spécifiée' ) );
+		}
+
+		try {
+			$compatibility = new BihrWI_Vehicle_Compatibility();
+			$result = $compatibility->import_brand_compatibility( $brand );
+			
+			if ( $result['success'] ) {
+				wp_send_json_success( array(
+					'message' => sprintf(
+						'%s : %d compatibilités importées, %d échecs',
+						$brand,
+						$result['imported'],
+						$result['errors']
+					),
+					'imported' => $result['imported'],
+					'errors' => $result['errors'],
+					'brand' => $brand
+				) );
+			} else {
+				wp_send_json_error( array( 'message' => $result['message'] ) );
+			}
+		} catch ( Exception $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * AJAX: Import de toutes les compatibilités (toutes les marques)
+	 */
+	public function ajax_import_all_compatibility() {
+		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_send_json_error( array( 'message' => 'Permission refusée' ) );
+		}
+
+		try {
+			$compatibility = new BihrWI_Vehicle_Compatibility();
+			$brands = array( 'SHIN YO', 'TECNIUM', 'V BIKE', 'V PARTS', 'VECTOR', 'VICMA' );
+			
+			$total_imported = 0;
+			$total_errors = 0;
+			$results = array();
+
+			foreach ( $brands as $brand ) {
+				$result = $compatibility->import_brand_compatibility( $brand );
+				
+				if ( $result['success'] ) {
+					$total_imported += $result['imported'];
+					$total_errors += $result['errors'];
+					$results[] = sprintf( '%s: %d importés', $brand, $result['imported'] );
+				} else {
+					$results[] = sprintf( '%s: ÉCHEC - %s', $brand, $result['message'] );
+				}
+			}
+
+			wp_send_json_success( array(
+				'message' => sprintf(
+					'Import global terminé : %d compatibilités importées, %d échecs',
+					$total_imported,
+					$total_errors
+				),
+				'total_imported' => $total_imported,
+				'total_errors' => $total_errors,
+				'details' => $results
+			) );
+
+		} catch ( Exception $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 	}
