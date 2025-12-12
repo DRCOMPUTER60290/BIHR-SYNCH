@@ -1178,6 +1178,9 @@ class BihrWI_Admin {
 	/**
 	 * AJAX: Import de compatibilités pour une marque spécifique
 	 */
+	/**
+	 * AJAX: Import de compatibilité par marque avec support de progression
+	 */
 	public function ajax_import_compatibility() {
 		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
 
@@ -1186,6 +1189,7 @@ class BihrWI_Admin {
 		}
 
 		$brand = isset( $_POST['brand'] ) ? sanitize_text_field( $_POST['brand'] ) : '';
+		$batch_start = isset( $_POST['batch_start'] ) ? intval( $_POST['batch_start'] ) : 0;
 		
 		if ( empty( $brand ) ) {
 			wp_send_json_error( array( 'message' => 'Marque non spécifiée' ) );
@@ -1193,22 +1197,26 @@ class BihrWI_Admin {
 
 		try {
 			$compatibility = new BihrWI_Vehicle_Compatibility();
-			$result = $compatibility->import_brand_compatibility( $brand );
+			$result = $compatibility->import_brand_compatibility( $brand, null, $batch_start );
 			
 			if ( $result['success'] ) {
 				wp_send_json_success( array(
 					'message' => sprintf(
-						'%s : %d compatibilités importées, %d échecs',
+						'%s : %d compatibilités importées (batch)',
 						$brand,
-						$result['imported'],
-						$result['errors']
+						$result['imported']
 					),
-					'imported' => $result['imported'],
-					'errors' => $result['errors'],
-					'brand' => $brand
+					'imported'      => $result['imported'],
+					'errors'        => $result['errors'],
+					'brand'         => $brand,
+					'progress'      => $result['progress'],
+					'processed'     => $result['processed'],
+					'total_lines'   => $result['total_lines'],
+					'is_complete'   => $result['is_complete'],
+					'next_batch'    => $result['next_batch'],
 				) );
 			} else {
-				wp_send_json_error( array( 'message' => $result['message'] ) );
+				wp_send_json_error( array( 'message' => $result['message'] ?? 'Erreur d\'import' ) );
 			}
 		} catch ( Exception $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
@@ -1218,6 +1226,9 @@ class BihrWI_Admin {
 	/**
 	 * AJAX: Import de toutes les compatibilités (toutes les marques)
 	 */
+	/**
+	 * AJAX: Import de toutes les compatibilités avec progression par batch
+	 */
 	public function ajax_import_all_compatibility() {
 		check_ajax_referer( 'bihrwi_ajax_nonce', 'nonce' );
 
@@ -1225,37 +1236,36 @@ class BihrWI_Admin {
 			wp_send_json_error( array( 'message' => 'Permission refusée' ) );
 		}
 
+		$brand = isset( $_POST['brand'] ) ? sanitize_text_field( $_POST['brand'] ) : '';
+		$batch_start = isset( $_POST['batch_start'] ) ? intval( $_POST['batch_start'] ) : 0;
+		
+		if ( empty( $brand ) ) {
+			wp_send_json_error( array( 'message' => 'Marque non spécifiée' ) );
+		}
+
 		try {
 			$compatibility = new BihrWI_Vehicle_Compatibility();
-			$brands = array( 'SHIN YO', 'TECNIUM', 'V BIKE', 'V PARTS', 'VECTOR', 'VICMA' );
+			$result = $compatibility->import_brand_compatibility( $brand, null, $batch_start );
 			
-			$total_imported = 0;
-			$total_errors = 0;
-			$results = array();
-
-			foreach ( $brands as $brand ) {
-				$result = $compatibility->import_brand_compatibility( $brand );
-				
-				if ( $result['success'] ) {
-					$total_imported += $result['imported'];
-					$total_errors += $result['errors'];
-					$results[] = sprintf( '%s: %d importés', $brand, $result['imported'] );
-				} else {
-					$results[] = sprintf( '%s: ÉCHEC - %s', $brand, $result['message'] );
-				}
+			if ( $result['success'] ) {
+				wp_send_json_success( array(
+					'message' => sprintf(
+						'%s : %d compatibilités importées (batch)',
+						$brand,
+						$result['imported']
+					),
+					'imported'      => $result['imported'],
+					'errors'        => $result['errors'],
+					'brand'         => $brand,
+					'progress'      => $result['progress'],
+					'processed'     => $result['processed'],
+					'total_lines'   => $result['total_lines'],
+					'is_complete'   => $result['is_complete'],
+					'next_batch'    => $result['next_batch'],
+				) );
+			} else {
+				wp_send_json_error( array( 'message' => $result['message'] ?? 'Erreur d\'import' ) );
 			}
-
-			wp_send_json_success( array(
-				'message' => sprintf(
-					'Import global terminé : %d compatibilités importées, %d échecs',
-					$total_imported,
-					$total_errors
-				),
-				'total_imported' => $total_imported,
-				'total_errors' => $total_errors,
-				'details' => $results
-			) );
-
 		} catch ( Exception $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}

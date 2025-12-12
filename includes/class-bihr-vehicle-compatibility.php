@@ -262,88 +262,160 @@ class BihrWI_Vehicle_Compatibility {
     }
 
     /**
-     * Importe les compatibilités depuis un fichier CSV de marque
+     * Importe les compatibilités par marque avec support de progression
+     * 
+     * @param string $brand_name Nom de la marque
+     * @param string $file_path Chemin du fichier CSV
+     * @param int $batch_start Ligne de départ pour ce batch
+     * @return array Résultat avec progression
      */
-    public function import_brand_compatibility( $brand_name, $file_path = null ) {
-        $this->logger->log( "=== IMPORT COMPATIBILITÉ {$brand_name} ===" );
-
+    public function import_brand_compatibility( $brand_name, $file_path = null, $batch_start = 0 ) {
         $file_path = $file_path ?: $this->import_dir . '[' . $brand_name . '].csv';
-        $this->logger->log( "Fichier: {$file_path}" );
-
+        
         if ( ! file_exists( $file_path ) ) {
-            $this->logger->log( 'Erreur: Fichier introuvable' );
             return array(
-                'success' => false,
-                'message' => 'Fichier introuvable: ' . $file_path,
-                'imported' => 0,
-                'errors' => 0
+                'success'       => false,
+                'imported'      => 0,
+                'errors'        => 0,
+                'total_lines'   => 0,
+                'processed'     => 0,
+                'progress'      => 0,
+                'is_complete'   => false
             );
         }
 
         global $wpdb;
 
-        $handle = fopen( $file_path, 'r' );
-        if ( ! $handle ) {
-            $this->logger->log( 'Erreur: Impossible d\'ouvrir le fichier' );
+        // Compter le nombre total de lignes une seule fois (stocké en transient)
+        $transient_key = 'bihr_import_total_' . md5( $file_path );
+        $total_lines = get_transient( $transient_key );
+        
+        if ( false === $total_lines ) {
+            $total_lines = $this->count_csv_lines( $file_path );
+            set_transient( $transient_key, $total_lines, HOUR_IN_SECONDS );
+        }
+
+        $batch_size = 100; // Traiter 100 lignes par batch
+        $h = fopen( $file_path, 'r' );
+        
+        if ( ! $h ) {
             return array(
-                'success' => false,
-                'message' => 'Impossible d\'ouvrir le fichier',
-                'imported' => 0,
-                'errors' => 0
+                'success'       => false,
+                'imported'      => 0,
+                'errors'        => 0,
+                'total_lines'   => $total_lines,
+                'processed'     => 0,
+                'progress'      => 0,
+                'is_complete'   => false
             );
         }
 
         // Lire le header
-        $header = fgetcsv( $handle, 10000, ',' );
+        $header = fgetcsv( $h, 10000, ',' );
         if ( ! $header ) {
-            fclose( $handle );
+            fclose( $h );
+            delete_transient( $transient_key );
             return array(
-                'success' => false,
-                'message' => 'Fichier CSV invalide (header manquant)',
-                'imported' => 0,
-                'errors' => 0
+                'success'       => false,
+                'imported'      => 0,
+                'errors'        => 0,
+                'total_lines'   => $total_lines,
+                'processed'     => 0,
+                'progress'      => 0,
+                'is_complete'   => false
             );
+        }
+
+        // Sauter aux lignes précédentes si reprise
+        for ( $i = 0; $i < $batch_start; $i++ ) {
+            fgetcsv( $h, 10000, ',' );
         }
 
         $count = 0;
         $errors = 0;
+        $batch = array();
+        $current_line = $batch_start;
 
-        while ( ( $row = fgetcsv( $handle, 10000, ',' ) ) !== false ) {
+        // Traiter un batch
+        while ( ( $row = fgetcsv( $h, 10000, ',' ) ) !== false && $current_line < $batch_start + $batch_size ) {
             if ( count( $row ) < 3 ) {
+                $current_line++;
                 continue;
             }
 
-            $compatibility_data = array(
-                'vehicle_code'             => $row[0],
-                'part_number'              => $row[1],
-                'barcode'                  => $row[2] ?? '',
-                'manufacturer_part_number' => $row[3] ?? '',
-                'position_id'              => $row[4] ?? '',
-                'position_value'           => $row[5] ?? '',
-                'attributes'               => $row[6] ?? '',
-                'source_brand'             => $brand_name,
+            $batch[] = array(
+                'vehicle_code'              => trim( $row[0] ?? '' ),
+                'part_number'               => trim( $row[1] ?? '' ),
+                'barcode'                   => trim( $row[2] ?? '' ),
+                'manufacturer_part_number'  => trim( $row[3] ?? '' ),
+                'position_id'               => trim( $row[4] ?? '' ),
+                'position_value'            => trim( $row[5] ?? '' ),
+                'attributes'                => trim( $row[6] ?? '' ),
+                'source_brand'              => $brand_name,
             );
 
-            $result = $wpdb->insert( $this->compatibility_table, $compatibility_data );
-            
-            if ( $result ) {
+            $current_line++;
+        }
+
+        fclose( $h );
+
+        // Insérer le batch
+        foreach ( $batch as $data ) {
+            if ( $wpdb->insert( $this->compatibility_table, $data ) ) {
                 $count++;
             } else {
                 $errors++;
             }
         }
 
-        fclose( $handle );
+        wp_cache_flush();
 
-        $this->logger->log( "✓ Import terminé: {$count} compatibilités importées, {$errors} erreurs" );
-        $this->logger->log( '==============================' );
+        // Calculer la progression
+        $processed = $batch_start + count( $batch );
+        $progress = $total_lines > 0 ? round( ( $processed / $total_lines ) * 100 ) : 100;
+        $is_complete = $processed >= $total_lines;
+
+        // Nettoyer le transient si terminé
+        if ( $is_complete ) {
+            delete_transient( $transient_key );
+        }
 
         return array(
-            'success' => true,
-            'message' => "{$count} compatibilités importées pour {$brand_name}, {$errors} erreurs",
-            'imported' => $count,
-            'errors' => $errors
+            'success'       => true,
+            'imported'      => $count,
+            'errors'        => $errors,
+            'total_lines'   => $total_lines,
+            'processed'     => $processed,
+            'progress'      => $progress,
+            'is_complete'   => $is_complete,
+            'next_batch'    => $is_complete ? 0 : $processed,
         );
+    }
+
+    /**
+     * Compte les lignes dans un fichier CSV
+     * 
+     * @param string $file_path Chemin du fichier
+     * @return int Nombre de lignes (sans le header)
+     */
+    protected function count_csv_lines( $file_path ) {
+        $count = 0;
+        $h = fopen( $file_path, 'r' );
+        
+        if ( ! $h ) {
+            return 0;
+        }
+
+        // Passer le header
+        fgetcsv( $h, 10000, ',' );
+
+        // Compter les lignes
+        while ( fgetcsv( $h, 10000, ',' ) !== false ) {
+            $count++;
+        }
+
+        fclose( $h );
+        return $count;
     }
 
     /**

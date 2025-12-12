@@ -358,24 +358,56 @@ jQuery(function($) {
         });
     });
 
-    // Import par marque (boutons)
+    // Import par marque (boutons) - avec progression réelle
     $('.brand-import-btn').on('click', function() {
         const brand = $(this).data('brand');
         const status = $(".brand-status[data-brand-status='" + brand + "']");
         const btn = $(this);
+        
         btn.prop('disabled', true).text('⏳ Import...');
-        status.text('Import en cours...');
-        $.post(ajaxUrl, { action: 'bihrwi_import_compatibility', nonce, brand }, function(resp) {
-            if (resp.success) {
-                status.html('<span style="color:#16a34a;">✅ ' + resp.data.message + '</span>');
-            } else {
-                status.html('<span style="color:#dc2626;">❌ ' + (resp.data.message || 'Erreur') + '</span>');
-            }
-        }).fail(() => status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>'))
-        .always(() => btn.prop('disabled', false).text('📥 Importer ' + brand));
+        status.html('');
+        
+        // Fonction récursive pour traiter les batches
+        function importBatch(batchStart = 0, totalImported = 0, totalErrors = 0) {
+            $.post(ajaxUrl, { 
+                action: 'bihrwi_import_compatibility', 
+                nonce, 
+                brand,
+                batch_start: batchStart
+            }, function(resp) {
+                if (resp.success) {
+                    const data = resp.data;
+                    totalImported += data.imported;
+                    totalErrors += data.errors;
+                    
+                    // Afficher la progression
+                    const progress = data.progress || 0;
+                    const percent = progress + '%';
+                    status.html('<span style="color:#2563eb;">⏳ ' + percent + ' (' + data.processed + '/' + data.total_lines + ')</span>');
+                    
+                    // Si le fichier n'est pas complètement importé, continuer
+                    if (!data.is_complete && data.next_batch !== undefined) {
+                        importBatch(data.next_batch, totalImported, totalErrors);
+                    } else {
+                        // Terminé
+                        status.html('<span style="color:#16a34a;">✅ ' + brand + ' : ' + totalImported + ' compatibilités importées' + (totalErrors > 0 ? ', ' + totalErrors + ' échecs' : '') + '</span>');
+                        btn.prop('disabled', false).text('📥 Importer ' + brand);
+                    }
+                } else {
+                    status.html('<span style="color:#dc2626;">❌ ' + (resp.data.message || 'Erreur') + '</span>');
+                    btn.prop('disabled', false).text('📥 Importer ' + brand);
+                }
+            }).fail(function() {
+                status.html('<span style="color:#dc2626;">❌ Erreur de connexion</span>');
+                btn.prop('disabled', false).text('📥 Importer ' + brand);
+            });
+        }
+        
+        // Démarrer l'import du premier batch
+        importBatch();
     });
 
-    // Import groupé avec progression (séquentiel)
+    // Import groupé avec progression par marque et par batch (séquentiel)
     $('#btn-import-all-brands').on('click', function() {
         const btn = $(this);
         const bar = $('#all-brands-progress-bar');
@@ -386,36 +418,67 @@ jQuery(function($) {
         setProgress(bar, text, 0, '0%');
 
         const total = brands.length;
-        let done = 0;
+        let currentBrandIndex = 0;
+        let totalImported = 0;
+        let totalErrors = 0;
 
-        function importNext() {
-            if (done >= total) {
+        function importBrandBatches(brandIndex) {
+            if (brandIndex >= total) {
+                // Tous les marques sont importées
                 setProgress(bar, text, 100, 'Terminé');
+                logBox.append('<div style="color:#16a34a; font-weight: bold;">✅ Import de tous les marques terminé ! ' + totalImported + ' compatibilités importées</div>');
                 btn.prop('disabled', false).text('🚀 Importer toutes les marques');
                 return;
             }
-            const brand = brands[done];
-            logBox.append('<div>⏳ ' + brand + '...</div>');
-            $.post(ajaxUrl, { action: 'bihrwi_import_compatibility', nonce, brand }, function(resp) {
-                done++;
-                const pct = Math.round((done / total) * 100);
-                setProgress(bar, text, pct, pct + '%');
-                if (resp.success) {
-                    logBox.append('<div style="color:#16a34a;">✅ ' + resp.data.message + '</div>');
-                } else {
-                    logBox.append('<div style="color:#dc2626;">❌ ' + (resp.data.message || 'Erreur') + '</div>');
-                }
-                importNext();
-            }).fail(function(){
-                done++;
-                const pct = Math.round((done / total) * 100);
-                setProgress(bar, text, pct, pct + '%');
-                logBox.append('<div style="color:#dc2626;">❌ Erreur de connexion sur ' + brand + '</div>');
-                importNext();
-            });
+
+            const brand = brands[brandIndex];
+            logBox.append('<div>⏳ Démarrage de ' + brand + '...</div>');
+            
+            function importBrand(batchStart = 0) {
+                $.post(ajaxUrl, { 
+                    action: 'bihrwi_import_all_compatibility', 
+                    nonce, 
+                    brand,
+                    batch_start: batchStart 
+                }, function(resp) {
+                    if (resp.success) {
+                        const data = resp.data;
+                        totalImported += data.imported;
+                        totalErrors += data.errors;
+                        
+                        // Mise à jour de la progression globale (en tenant compte du nombre de marques)
+                        const brandProgress = (brandIndex / total) * 100;
+                        const brandBatchProgress = ((data.progress || 0) / 100) * (100 / total);
+                        const globalProgress = Math.round(brandProgress + brandBatchProgress);
+                        
+                        logBox.append('<div style="color:#2563eb;">  ⏳ ' + brand + ' : ' + (data.progress || 0) + '% (' + data.processed + '/' + data.total_lines + ')</div>');
+                        setProgress(bar, text, globalProgress, globalProgress + '%');
+                        
+                        // Si ce batch n'est pas complet, continuer avec le marque courant
+                        if (!data.is_complete && data.next_batch !== undefined) {
+                            importBrand(data.next_batch);
+                        } else {
+                            // Marque terminée, passer à la suivante
+                            logBox.append('<div style="color:#16a34a;">✅ ' + brand + ' : ' + totalImported + ' importés au total</div>');
+                            importBrandBatches(brandIndex + 1);
+                        }
+                    } else {
+                        logBox.append('<div style="color:#dc2626;">❌ ' + brand + ' : ' + (resp.data.message || 'Erreur') + '</div>');
+                        // Continuer avec la marque suivante même en cas d'erreur
+                        importBrandBatches(brandIndex + 1);
+                    }
+                }).fail(function() {
+                    logBox.append('<div style="color:#dc2626;">❌ Erreur de connexion sur ' + brand + '</div>');
+                    importBrandBatches(brandIndex + 1);
+                });
+            }
+
+            // Démarrer l'import du marque courant
+            importBrand();
         }
 
-        importNext();
+        // Démarrer avec la première marque
+        importBrandBatches(0);
     });
 });
 </script>
